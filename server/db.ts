@@ -1,7 +1,7 @@
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
 import { ENV } from "./_core/env";
-import { inspections, users } from "../drizzle/schema";
+import { inspections, subscriptions, users } from "../drizzle/schema";
 import { desc, eq } from "drizzle-orm";
 import type { InsertInspection } from "../drizzle/schema";
 
@@ -130,4 +130,83 @@ export async function getInspectionCountThisMonth(userId: number) {
     .where(eq(inspections.userId, userId));
 
   return results.filter((r: { createdAt: Date }) => new Date(r.createdAt) >= startOfMonth).length;
+}
+
+export async function getInspectionCountToday(userId: number) {
+  const database = getDb()!;
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+
+  const results = await database
+    .select()
+    .from(inspections)
+    .where(eq(inspections.userId, userId));
+
+  return results.filter((r: { createdAt: Date }) => new Date(r.createdAt) >= startOfDay).length;
+}
+
+// ── Subscription helpers ──────────────────────────────────────
+
+export async function getSubscriptionByUserId(userId: number) {
+  const database = getDb()!;
+  const result = await database
+    .select()
+    .from(subscriptions)
+    .where(eq(subscriptions.userId, userId))
+    .limit(1);
+  return result[0] ?? null;
+}
+
+export async function upsertSubscription(data: {
+  userId: number;
+  stripeSubscriptionId: string;
+  stripePriceId: string;
+  plan: "pro" | "team";
+  status: string;
+  currentPeriodEnd?: Date | null;
+  cancelAtPeriodEnd?: boolean;
+}) {
+  const database = getDb()!;
+  const values = {
+    userId: data.userId,
+    stripeSubscriptionId: data.stripeSubscriptionId,
+    stripePriceId: data.stripePriceId,
+    plan: data.plan,
+    status: data.status,
+    currentPeriodEnd: data.currentPeriodEnd ?? null,
+    cancelAtPeriodEnd: data.cancelAtPeriodEnd ? 1 : 0,
+  };
+  await database
+    .insert(subscriptions)
+    .values(values)
+    .onDuplicateKeyUpdate({
+      set: {
+        stripeSubscriptionId: data.stripeSubscriptionId,
+        stripePriceId: data.stripePriceId,
+        plan: data.plan,
+        status: data.status,
+        currentPeriodEnd: data.currentPeriodEnd ?? null,
+        cancelAtPeriodEnd: data.cancelAtPeriodEnd ? 1 : 0,
+      },
+    });
+}
+
+export async function deleteSubscriptionByUserId(userId: number) {
+  const database = getDb()!;
+  await database.delete(subscriptions).where(eq(subscriptions.userId, userId));
+}
+
+export async function getUserByStripeCustomerId(stripeCustomerId: string) {
+  const database = getDb()!;
+  const result = await database
+    .select()
+    .from(users)
+    .where(eq(users.stripeCustomerId, stripeCustomerId))
+    .limit(1);
+  return result[0] ?? null;
+}
+
+export async function updateUserStripeCustomerId(userId: number, stripeCustomerId: string) {
+  const database = getDb()!;
+  await database.update(users).set({ stripeCustomerId }).where(eq(users.id, userId));
 }

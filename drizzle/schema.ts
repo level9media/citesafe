@@ -10,6 +10,8 @@ export const users = mysqlTable("users", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
+  // Stripe customer ID — stored here so we can look up subscriptions
+  stripeCustomerId: varchar("stripeCustomerId", { length: 64 }),
 });
 
 export type User = typeof users.$inferSelect;
@@ -32,3 +34,20 @@ export const inspections = mysqlTable("inspections", {
 
 export type Inspection = typeof inspections.$inferSelect;
 export type InsertInspection = typeof inspections.$inferInsert;
+
+// Subscriptions table — one active row per user
+export const subscriptions = mysqlTable("subscriptions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique(),
+  stripeSubscriptionId: varchar("stripeSubscriptionId", { length: 64 }).notNull(),
+  stripePriceId: varchar("stripePriceId", { length: 64 }).notNull(),
+  plan: mysqlEnum("plan", ["pro", "team"]).notNull(),
+  status: varchar("status", { length: 32 }).notNull().default("active"), // active | past_due | canceled
+  currentPeriodEnd: timestamp("currentPeriodEnd"),
+  cancelAtPeriodEnd: int("cancelAtPeriodEnd").notNull().default(0), // 0 = false, 1 = true
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Subscription = typeof subscriptions.$inferSelect;
+export type InsertSubscription = typeof subscriptions.$inferInsert;

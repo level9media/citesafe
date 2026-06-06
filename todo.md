@@ -39,3 +39,26 @@
 - [x] history.list — returns user inspections
 - [x] history.delete — removes inspection
 - [x] auth.logout — clears session cookie
+
+## Claude Vision Integration
+- [ ] Add ANTHROPIC_API_KEY secret
+- [ ] Update analyze procedure to call Claude claude-opus-4-5 vision API directly with image base64
+- [ ] Fall back to text-only analysis if no image provided
+- [ ] Test vision analysis end-to-end
+
+## Stripe Payments
+- [ ] Add Stripe feature scaffold (webdev_add_feature)
+- [ ] Create Pro ($49/mo) and Team ($149/mo) Stripe products/prices
+- [ ] Add subscriptions table to DB schema
+- [ ] Build /upgrade page with pricing cards
+- [ ] Wire Stripe checkout session creation (tRPC)
+- [ ] Handle Stripe webhook: subscription created/updated/cancelled
+- [ ] Enforce Pro tier limits in analyze procedure (unlimited for Pro/Team)
+- [ ] Show plan badge and manage billing link in Account tab
+- [ ] PDF report generation for Pro users on violation results
+- [ ] Test Stripe checkout flow end-to-end
+
+## Rate Limiting
+- [x] Add daily analysis cap: 50/day for Pro/Team users, free tier stays at 5/month
+- [x] Add inspections_daily count query to db.ts
+- [x] Enforce daily cap in analyze procedure before calling Claude

@@ -2,18 +2,28 @@ import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
-import { invokeLLM } from "./_core/llm";
+import { invokeClaudeVision } from "./claude";
+import { getOrCreateCustomer, getOrCreatePriceId, getStripe, PLANS, type PlanKey } from "./stripe";
 import {
   createInspection,
   getInspectionsByUser,
   deleteInspection,
   getInspectionCountThisMonth,
+  getInspectionCountToday,
+  getSubscriptionByUserId,
+  upsertSubscription,
+  deleteSubscriptionByUserId,
+  getUserByStripeCustomerId,
+  updateUserStripeCustomerId,
 } from "./db";
 import { z } from "zod";
 import type { InspectionResult } from "@shared/types";
 
-const FREE_TIER_LIMIT = 5;
+// ── Limits ────────────────────────────────────────────────────────────────────
+const FREE_TIER_MONTHLY_LIMIT = 5;
+const PRO_DAILY_LIMIT = 50;
 
+// ── OSHA system prompt ────────────────────────────────────────────────────────
 const OSHA_SYSTEM_PROMPT = `You are CiteSafe AI, an expert OSHA compliance inspector with deep mastery of 29 CFR 1926 (Construction) and 29 CFR 1910 (General Industry). Analyze job site photos and descriptions for OSHA violations.
 
 PENALTY REFERENCE (2024): Serious: up to $16,131 per violation. Willful/Repeat: up to $161,323 per violation.
@@ -39,6 +49,7 @@ RESPOND ONLY WITH VALID JSON, no preamble, no markdown fences:
 
 export const appRouter = router({
   system: systemRouter,
+
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {
@@ -48,20 +59,19 @@ export const appRouter = router({
     }),
   }),
 
+  // ── Inspect ────────────────────────────────────────────────────────────────
   inspect: router({
     analyze: protectedProcedure
       .input(
         z.object({
           text: z.string().optional(),
           imageBase64: z.string().optional(),
-          imageMimeType: z.string().optional().default("image/jpeg"),
+          imageMimeType: z
+            .enum(["image/jpeg", "image/png", "image/gif", "image/webp"])
+            .optional()
+            .default("image/jpeg"),
           conversationHistory: z
-            .array(
-              z.object({
-                role: z.enum(["user", "assistant"]),
-                content: z.string(),
-              })
-            )
+            .array(z.object({ role: z.enum(["user", "assistant"]), content: z.string() }))
             .optional()
             .default([]),
         })
@@ -69,25 +79,36 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const userId = ctx.user.id;
 
-        // Check monthly usage limit
-        const usedThisMonth = await getInspectionCountThisMonth(userId);
-        if (usedThisMonth >= FREE_TIER_LIMIT) {
-          throw new Error(
-            `Monthly limit reached. You've used ${usedThisMonth}/${FREE_TIER_LIMIT} free analyses this month. Upgrade to Pro for unlimited access.`
-          );
+        // Check subscription tier
+        const sub = await getSubscriptionByUserId(userId);
+        const isPro = sub && (sub.status === "active" || sub.status === "trialing");
+
+        if (isPro) {
+          // Pro/Team: enforce 50/day cap
+          const usedToday = await getInspectionCountToday(userId);
+          if (usedToday >= PRO_DAILY_LIMIT) {
+            throw new Error(
+              `Daily limit reached. You've used ${usedToday}/${PRO_DAILY_LIMIT} analyses today. Resets at midnight.`
+            );
+          }
+        } else {
+          // Free tier: enforce 5/month cap
+          const usedThisMonth = await getInspectionCountThisMonth(userId);
+          if (usedThisMonth >= FREE_TIER_MONTHLY_LIMIT) {
+            throw new Error(
+              `Monthly limit reached. You've used ${usedThisMonth}/${FREE_TIER_MONTHLY_LIMIT} free analyses this month. Upgrade to Pro for unlimited access.`
+            );
+          }
         }
 
-        // Build messages
-        const messages: Array<{
-          role: "system" | "user" | "assistant";
-          content:
-            | string
-            | Array<{
-                type: string;
-                text?: string;
-                image_url?: { url: string };
-              }>;
-        }> = [{ role: "system", content: OSHA_SYSTEM_PROMPT }];
+        // Build Claude messages
+        type ClaudeContent =
+          | { type: "text"; text: string }
+          | { type: "image"; source: { type: "base64"; media_type: "image/jpeg" | "image/png" | "image/gif" | "image/webp"; data: string } };
+
+        type ClaudeMsg = { role: "user" | "assistant"; content: string | ClaudeContent[] };
+
+        const messages: ClaudeMsg[] = [];
 
         // Add conversation history
         for (const msg of input.conversationHistory) {
@@ -96,26 +117,20 @@ export const appRouter = router({
 
         // Build current user message
         if (input.imageBase64) {
-          const contentParts: Array<{
-            type: string;
-            text?: string;
-            image_url?: { url: string };
-          }> = [
+          const contentParts: ClaudeContent[] = [
             {
-              type: "image_url",
-              image_url: {
-                url: `data:${input.imageMimeType};base64,${input.imageBase64}`,
+              type: "image",
+              source: {
+                type: "base64",
+                media_type: input.imageMimeType,
+                data: input.imageBase64,
               },
             },
           ];
-          if (input.text) {
-            contentParts.push({ type: "text", text: input.text });
-          } else {
-            contentParts.push({
-              type: "text",
-              text: "Analyze this job site image for OSHA violations.",
-            });
-          }
+          contentParts.push({
+            type: "text",
+            text: input.text || "Analyze this job site image for OSHA violations.",
+          });
           messages.push({ role: "user", content: contentParts });
         } else {
           messages.push({
@@ -124,26 +139,14 @@ export const appRouter = router({
           });
         }
 
-        // Call LLM
-        const llmResult = await invokeLLM({
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          messages: messages as any,
+        // Call Claude Vision
+        const rawText = await invokeClaudeVision({
+          systemPrompt: OSHA_SYSTEM_PROMPT,
+          messages,
           maxTokens: 1200,
         });
 
-        const rawText =
-          llmResult.choices[0]?.message?.content;
-        const textContent =
-          typeof rawText === "string"
-            ? rawText
-            : Array.isArray(rawText)
-            ? rawText
-                .filter((p): p is { type: "text"; text: string } => p.type === "text")
-                .map(p => p.text)
-                .join("")
-            : "";
-
-        const clean = textContent.replace(/```json|```/g, "").trim();
+        const clean = rawText.replace(/```json|```/g, "").trim();
         let result: InspectionResult;
         try {
           result = JSON.parse(clean);
@@ -165,28 +168,103 @@ export const appRouter = router({
           fullResult: JSON.stringify(result),
         });
 
-        const newUsed = usedThisMonth + 1;
-        return {
-          result,
-          usage: { used: newUsed, limit: FREE_TIER_LIMIT },
-        };
+        // Return result + updated usage
+        if (isPro) {
+          const usedToday = await getInspectionCountToday(userId);
+          return { result, usage: { used: usedToday, limit: PRO_DAILY_LIMIT, period: "day" as const } };
+        } else {
+          const usedThisMonth = await getInspectionCountThisMonth(userId);
+          return { result, usage: { used: usedThisMonth, limit: FREE_TIER_MONTHLY_LIMIT, period: "month" as const } };
+        }
       }),
 
     usageThisMonth: protectedProcedure.query(async ({ ctx }) => {
+      const sub = await getSubscriptionByUserId(ctx.user.id);
+      const isPro = sub && (sub.status === "active" || sub.status === "trialing");
+      if (isPro) {
+        const used = await getInspectionCountToday(ctx.user.id);
+        return { used, limit: PRO_DAILY_LIMIT, period: "day" as const, plan: sub.plan };
+      }
       const used = await getInspectionCountThisMonth(ctx.user.id);
-      return { used, limit: FREE_TIER_LIMIT };
+      return { used, limit: FREE_TIER_MONTHLY_LIMIT, period: "month" as const, plan: "free" as const };
     }),
   }),
 
+  // ── History ────────────────────────────────────────────────────────────────
   history: router({
     list: protectedProcedure.query(async ({ ctx }) => {
       return getInspectionsByUser(ctx.user.id, 100);
     }),
-
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
         return deleteInspection(input.id, ctx.user.id);
+      }),
+  }),
+
+  // ── Billing / Stripe ───────────────────────────────────────────────────────
+  billing: router({
+    getSubscription: protectedProcedure.query(async ({ ctx }) => {
+      return getSubscriptionByUserId(ctx.user.id);
+    }),
+
+    createCheckoutSession: protectedProcedure
+      .input(z.object({ plan: z.enum(["pro", "team"]), origin: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        const stripe = getStripe();
+        const user = ctx.user;
+
+        // Get or create Stripe customer
+        const customerId = await getOrCreateCustomer(
+          user.stripeCustomerId,
+          user.email,
+          user.name
+        );
+
+        // Save customer ID if new
+        if (!user.stripeCustomerId) {
+          await updateUserStripeCustomerId(user.id, customerId);
+        }
+
+        // Get price ID for plan
+        const priceId = await getOrCreatePriceId(input.plan as PlanKey);
+
+        const session = await stripe.checkout.sessions.create({
+          customer: customerId,
+          mode: "subscription",
+          payment_method_types: ["card"],
+          line_items: [{ price: priceId, quantity: 1 }],
+          allow_promotion_codes: true,
+          success_url: `${input.origin}/account?upgrade=success`,
+          cancel_url: `${input.origin}/account?upgrade=cancelled`,
+          client_reference_id: user.id.toString(),
+          metadata: {
+            user_id: user.id.toString(),
+            customer_email: user.email ?? "",
+            customer_name: user.name ?? "",
+            plan: input.plan,
+          },
+        });
+
+        return { url: session.url };
+      }),
+
+    createPortalSession: protectedProcedure
+      .input(z.object({ origin: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        const stripe = getStripe();
+        const user = ctx.user;
+
+        if (!user.stripeCustomerId) {
+          throw new Error("No billing account found. Please subscribe first.");
+        }
+
+        const session = await stripe.billingPortal.sessions.create({
+          customer: user.stripeCustomerId,
+          return_url: `${input.origin}/account`,
+        });
+
+        return { url: session.url };
       }),
   }),
 });

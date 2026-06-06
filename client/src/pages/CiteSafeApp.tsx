@@ -79,16 +79,21 @@ function StatusBar({ status }: { status: string }) {
 function HomeTab({
   onStartInspect,
   onGoHistory,
+  onGoAccount,
 }: {
   onStartInspect: () => void;
   onGoHistory: () => void;
+  onGoAccount: () => void;
 }) {
   const { user } = useAuth();
   const { data: usage } = trpc.inspect.usageThisMonth.useQuery();
   const { data: history } = trpc.history.list.useQuery();
+  const { data: sub } = trpc.billing.getSubscription.useQuery();
 
   const used = usage?.used ?? 0;
   const limit = usage?.limit ?? 5;
+  const period = usage?.period ?? "month";
+  const isPro = sub && (sub.status === "active" || sub.status === "trialing");
   const pct = Math.round((used / limit) * 100);
 
   const recent = (history ?? []).slice(0, 3);
@@ -128,25 +133,34 @@ function HomeTab({
       <div className="rounded-xl border border-border bg-white p-5 shadow-sm">
         <div className="flex items-center justify-between mb-3">
           <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Monthly Analyses
+            {isPro ? "Daily Analyses" : "Monthly Analyses"}
           </span>
-          <span className="text-xs font-medium text-muted-foreground">
-            Free Tier
+          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+            isPro ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground"
+          }`}>
+            {isPro ? (sub.plan === "team" ? "Team" : "Pro") : "Free Tier"}
           </span>
         </div>
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm font-medium">{used} of {limit} used</span>
-          <span className="text-xs text-muted-foreground">{limit - used} remaining</span>
+          <span className="text-xs text-muted-foreground">{limit - used} remaining today</span>
         </div>
         <div className="h-2 bg-muted rounded-full overflow-hidden">
           <div
-            className="h-full bg-[var(--cs-red)] rounded-full transition-all duration-500"
-            style={{ width: `${pct}%` }}
+            className={`h-full rounded-full transition-all duration-500 ${
+              isPro ? "bg-emerald-500" : "bg-[var(--cs-red)]"
+            }`}
+            style={{ width: `${Math.min(pct, 100)}%` }}
           />
         </div>
-        <p className="mt-2 text-xs text-muted-foreground">
-          Upgrade to Pro for unlimited analyses →
-        </p>
+        {!isPro && (
+          <button
+            onClick={onGoAccount}
+            className="mt-2 text-xs font-medium text-[var(--cs-red)] hover:underline"
+          >
+            Upgrade to Pro for 50 analyses/day →
+          </button>
+        )}
       </div>
 
       {/* Stats row */}
@@ -227,7 +241,7 @@ function InspectTab() {
   const [text, setText] = useState("");
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [imageMime, setImageMime] = useState("image/jpeg");
+  const [imageMime, setImageMime] = useState<"image/jpeg" | "image/png" | "image/gif" | "image/webp">("image/jpeg");
   const [result, setResult] = useState<InspectionResult | null>(null);
   const [usage, setUsage] = useState<{ used: number; limit: number } | null>(null);
   const [clarifyText, setClarifyText] = useState("");
@@ -256,7 +270,8 @@ function InspectTab() {
       const dataUrl = ev.target?.result as string;
       setImagePreview(dataUrl);
       setImageBase64(dataUrl.split(",")[1]);
-      setImageMime(file.type || "image/jpeg");
+      const mime = (file.type || "image/jpeg") as "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+      setImageMime(mime);
     };
     reader.readAsDataURL(file);
   }, []);
@@ -720,9 +735,38 @@ function HistoryTab() {
 function AccountTab() {
   const { user, logout } = useAuth();
   const { data: usage } = trpc.inspect.usageThisMonth.useQuery();
+  const { data: sub, refetch: refetchSub } = trpc.billing.getSubscription.useQuery();
 
   const used = usage?.used ?? 0;
   const limit = usage?.limit ?? 5;
+  const period = usage?.period ?? "month";
+  const isPro = sub && (sub.status === "active" || sub.status === "trialing");
+  const planLabel = isPro ? (sub.plan === "team" ? "Team" : "Pro") : "Field (Free)";
+
+  const checkoutMutation = trpc.billing.createCheckoutSession.useMutation({
+    onSuccess: (data) => {
+      if (data.url) {
+        toast.success("Redirecting to checkout…");
+        window.open(data.url, "_blank");
+      }
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const portalMutation = trpc.billing.createPortalSession.useMutation({
+    onSuccess: (data) => {
+      if (data.url) window.open(data.url, "_blank");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const handleUpgrade = (plan: "pro" | "team") => {
+    checkoutMutation.mutate({ plan, origin: window.location.origin });
+  };
+
+  const handleManageBilling = () => {
+    portalMutation.mutate({ origin: window.location.origin });
+  };
 
   return (
     <div className="space-y-5">
@@ -745,36 +789,108 @@ function AccountTab() {
         </div>
         <Separator className="mb-4" />
         <div className="space-y-3">
-          {[
-            { label: "Plan", value: "Field (Free)", highlight: true },
-            { label: "Analyses Used", value: `${used} / ${limit}` },
-            { label: "Monthly Limit", value: `${limit} / month` },
-          ].map(row => (
-            <div key={row.label} className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">{row.label}</span>
-              <span className={`text-sm font-medium ${row.highlight ? "text-[var(--cs-red)]" : "text-foreground"}`}>
-                {row.value}
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">Plan</span>
+            <span className={`text-sm font-semibold ${isPro ? "text-emerald-600" : "text-[var(--cs-red)]"}`}>
+              {planLabel}
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">Analyses Used</span>
+            <span className="text-sm font-medium text-foreground">{used} / {limit}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">{isPro ? "Daily Limit" : "Monthly Limit"}</span>
+            <span className="text-sm font-medium text-foreground">{limit} / {period}</span>
+          </div>
+          {sub?.currentPeriodEnd && (
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Renews</span>
+              <span className="text-sm font-medium text-foreground">
+                {new Date(sub.currentPeriodEnd).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
               </span>
             </div>
-          ))}
+          )}
         </div>
       </div>
 
-      {/* Upgrade card */}
-      <div className="rounded-xl border border-[var(--cs-red-border)] bg-[var(--cs-red-light)] p-5">
-        <div className="flex items-start gap-3 mb-3">
-          <TrendingUp className="w-5 h-5 text-[var(--cs-red)] flex-shrink-0 mt-0.5" />
-          <div>
-            <h3 className="font-bold text-foreground">Upgrade to Pro</h3>
-            <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
-              Unlimited analyses, PDF reports, Letters of Interpretation, and violation history export.
-            </p>
+      {/* Pro subscriber — manage billing */}
+      {isPro ? (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5">
+          <div className="flex items-start gap-3 mb-3">
+            <CheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <h3 className="font-bold text-foreground">You're on {planLabel}</h3>
+              <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
+                {sub?.plan === "team"
+                  ? "Unlimited analyses, multi-user org accounts, PDF reports, and priority support."
+                  : "Unlimited analyses (50/day), PDF reports, and violation history export."}
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            className="w-full border-emerald-300 text-emerald-700 hover:bg-emerald-100"
+            onClick={handleManageBilling}
+            disabled={portalMutation.isPending}
+          >
+            {portalMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+            Manage Billing & Invoices →
+          </Button>
+        </div>
+      ) : (
+        /* Free tier — upgrade options */
+        <div className="space-y-3">
+          {/* Pro */}
+          <div className="rounded-xl border border-[var(--cs-red-border)] bg-[var(--cs-red-light)] p-5">
+            <div className="flex items-start gap-3 mb-3">
+              <TrendingUp className="w-5 h-5 text-[var(--cs-red)] flex-shrink-0 mt-0.5" />
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-foreground">Pro</h3>
+                  <span className="text-xs font-semibold text-[var(--cs-red)] bg-white border border-[var(--cs-red-border)] px-2 py-0.5 rounded-full">$49/mo</span>
+                </div>
+                <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
+                  50 analyses/day, PDF reports, full violation history export.
+                </p>
+              </div>
+            </div>
+            <Button
+              className="w-full bg-[var(--cs-red)] hover:bg-[var(--cs-red)]/90 text-white font-semibold"
+              onClick={() => handleUpgrade("pro")}
+              disabled={checkoutMutation.isPending}
+            >
+              {checkoutMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Upgrade to Pro →
+            </Button>
+          </div>
+
+          {/* Team */}
+          <div className="rounded-xl border border-border bg-white p-5 shadow-sm">
+            <div className="flex items-start gap-3 mb-3">
+              <Shield className="w-5 h-5 text-foreground flex-shrink-0 mt-0.5" />
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-foreground">Team</h3>
+                  <span className="text-xs font-semibold text-foreground bg-muted border border-border px-2 py-0.5 rounded-full">$149/mo</span>
+                </div>
+                <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
+                  Everything in Pro + multi-user org accounts (up to 10 seats).
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => handleUpgrade("team")}
+              disabled={checkoutMutation.isPending}
+            >
+              {checkoutMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Upgrade to Team →
+            </Button>
           </div>
         </div>
-        <Button className="w-full bg-[var(--cs-red)] hover:bg-[var(--cs-red)]/90 text-white font-semibold">
-          Upgrade — $49/month →
-        </Button>
-      </div>
+      )}
 
       {/* About */}
       <div className="rounded-xl border border-border bg-white p-5 shadow-sm">
@@ -785,7 +901,7 @@ function AccountTab() {
           {[
             { label: "Version", value: "1.0.0" },
             { label: "Regulations", value: "29 CFR 1910 + 1926" },
-            { label: "AI Engine", value: "Manus Forge LLM" },
+            { label: "AI Engine", value: "Claude Vision (Anthropic)" },
             { label: "Last Updated", value: "June 2026" },
           ].map(row => (
             <div key={row.label} className="flex items-center justify-between">
@@ -968,6 +1084,7 @@ export default function CiteSafeApp() {
           <HomeTab
             onStartInspect={() => navigateTo("inspect")}
             onGoHistory={() => navigateTo("history")}
+            onGoAccount={() => navigateTo("account")}
           />
         )}
         {activeTab === "inspect" && (
