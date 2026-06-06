@@ -813,6 +813,91 @@ function AccountTab() {
   );
 }
 
+// ── Guest components ────────────────────────────────────────────────────────────
+function GuestGate() {
+  return (
+    <div className="flex flex-col items-center justify-center py-20 gap-5 text-center">
+      <div className="w-14 h-14 rounded-2xl bg-[var(--cs-red-light)] border border-[var(--cs-red-border)] flex items-center justify-center">
+        <Shield className="w-7 h-7 text-[var(--cs-red)]" />
+      </div>
+      <div>
+        <p className="font-bold text-foreground">Sign in to access this section</p>
+        <p className="text-sm text-muted-foreground mt-1">Create a free account to save your inspection history and track usage.</p>
+      </div>
+      <Button
+        className="bg-[var(--cs-red)] hover:bg-[var(--cs-red)]/90 text-white font-semibold"
+        onClick={() => { window.location.href = getLoginUrl(); }}
+      >
+        Sign in — it's free
+      </Button>
+    </div>
+  );
+}
+
+function GuestInspectTab() {
+  const SAMPLE_PROMPTS_DEMO = [
+    "Worker on scaffold 15 ft high, no guardrails and no personal fall arrest system visible.",
+    "Electrical panel open with exposed wiring next to standing water on the floor.",
+    "Workers grinding metal without face shields or eye protection. No PPE visible.",
+    "Trench about 5 feet deep with no shoring, no ladder, and no spoil pile setback.",
+  ];
+  const [text, setText] = useState("");
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-xl font-bold tracking-tight">Inspect a Condition</h2>
+        <p className="text-sm text-muted-foreground mt-1">Upload a photo, describe what you see, or both.</p>
+      </div>
+
+      {/* Image upload placeholder */}
+      <div className="grid grid-cols-2 gap-3">
+        {[{ icon: Camera, label: "Take Photo" }, { icon: Upload, label: "Upload Image" }].map(btn => (
+          <button
+            key={btn.label}
+            onClick={() => { window.location.href = getLoginUrl(); }}
+            className="flex flex-col items-center justify-center gap-2 h-24 rounded-xl border-2 border-dashed border-border bg-muted/30 hover:border-[var(--cs-red)] hover:bg-[var(--cs-red-light)] transition-all group"
+          >
+            <btn.icon className="w-6 h-6 text-muted-foreground group-hover:text-[var(--cs-red)] transition-colors" />
+            <span className="text-xs font-medium text-muted-foreground group-hover:text-[var(--cs-red)] transition-colors">{btn.label}</span>
+          </button>
+        ))}
+      </div>
+
+      <textarea
+        className="w-full rounded-xl border border-border bg-white text-sm p-4 resize-none focus:outline-none focus:ring-2 focus:ring-[var(--cs-red)]/30 focus:border-[var(--cs-red)] placeholder:text-muted-foreground/60"
+        rows={4}
+        placeholder="Describe what you see… e.g. 'Worker on scaffold 15 ft high, no guardrails, no harness'"
+        value={text}
+        onChange={e => setText(e.target.value)}
+      />
+
+      <Button
+        className="w-full bg-[var(--cs-red)] hover:bg-[var(--cs-red)]/90 text-white font-semibold h-11"
+        onClick={() => { window.location.href = getLoginUrl(); }}
+      >
+        <Search className="w-4 h-4 mr-2" />
+        Sign in to Analyze
+      </Button>
+
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">Sample Scenarios</p>
+        <div className="space-y-2">
+          {SAMPLE_PROMPTS_DEMO.map((prompt, i) => (
+            <button
+              key={i}
+              onClick={() => setText(prompt)}
+              className="w-full text-left rounded-lg border border-border bg-white hover:border-[var(--cs-red)] hover:bg-[var(--cs-red-light)] px-4 py-3 text-sm text-muted-foreground hover:text-foreground transition-all"
+            >
+              {prompt}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main App Shell ────────────────────────────────────────────────────────────
 export default function CiteSafeApp() {
   const { user, loading } = useAuth();
@@ -836,51 +921,15 @@ export default function CiteSafeApp() {
     setLocation(paths[tab]);
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="w-8 h-8 animate-spin text-[var(--cs-red)]" />
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background px-6">
-        <div className="w-full max-w-sm space-y-8 text-center">
-          <div>
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[var(--cs-red-light)] border border-[var(--cs-red-border)] mb-4">
-              <Shield className="w-8 h-8 text-[var(--cs-red)]" />
-            </div>
-            <h1 className="text-3xl font-black tracking-tight">
-              CITE<span className="text-[var(--cs-red)]">SAFE</span>
-            </h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              OSHA Violation Inspector — AI-powered compliance analysis
-            </p>
-          </div>
-          <div className="space-y-3">
-            <Button
-              className="w-full bg-[var(--cs-red)] hover:bg-[var(--cs-red)]/90 text-white font-semibold h-11"
-              onClick={() => { window.location.href = getLoginUrl(); }}
-            >
-              Sign in to continue
-            </Button>
-            <p className="text-xs text-muted-foreground">
-              Free tier includes 5 analyses per month
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   const NAV_ITEMS = [
     { key: "home" as Tab, label: "Home", icon: Home },
     { key: "inspect" as Tab, label: "Inspect", icon: Search },
     { key: "history" as Tab, label: "History", icon: ClipboardList },
     { key: "account" as Tab, label: "Account", icon: User },
   ];
+
+  // Guest mode: show app but restrict account/history to signed-in users
+  const isGuest = !user && !loading;
 
   return (
     <div className="min-h-screen bg-[oklch(0.97_0.002_286)] flex flex-col">
@@ -921,9 +970,15 @@ export default function CiteSafeApp() {
             onGoHistory={() => navigateTo("history")}
           />
         )}
-        {activeTab === "inspect" && <InspectTab />}
-        {activeTab === "history" && <HistoryTab />}
-        {activeTab === "account" && <AccountTab />}
+        {activeTab === "inspect" && (
+          isGuest ? <GuestInspectTab /> : <InspectTab />
+        )}
+        {activeTab === "history" && (
+          isGuest ? <GuestGate /> : <HistoryTab />
+        )}
+        {activeTab === "account" && (
+          isGuest ? <GuestGate /> : <AccountTab />
+        )}
       </main>
 
       {/* Bottom tab bar */}
