@@ -459,6 +459,17 @@ function InspectTab() {
 
         {/* Actions */}
         <div className="space-y-2">
+          {isViolation && (
+            <Button
+              variant="outline"
+              className="w-full border-[var(--cs-red)] text-[var(--cs-red)] hover:bg-[var(--cs-red-light)] opacity-60 cursor-not-allowed"
+              disabled
+              title="Upgrade to Pro to download PDF reports"
+            >
+              <FileText className="w-4 h-4 mr-2" />
+              Download PDF Report — Pro Feature
+            </Button>
+          )}
           <Button
             variant="outline"
             className="w-full"

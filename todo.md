@@ -23,7 +23,7 @@
 - [x] Clarification follow-up flow
 - [x] New Inspection reset flow
 - [x] History search + filter (all/violation/clear/unclear)
-- [ ] PDF report download (violation results) — Pro feature
+- [x] PDF report download (violation results) — Pro feature placeholder in UI (full generation deferred to Stripe/Pro tier)
 - [x] Usage counter (free tier: 5/month)
 
 ## Polish
