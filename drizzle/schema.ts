@@ -1,17 +1,7 @@
 import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
 
-/**
- * Core user table backing auth flow.
- * Extend this file with additional tables as your product grows.
- * Columns use camelCase to match both database fields and generated types.
- */
 export const users = mysqlTable("users", {
-  /**
-   * Surrogate primary key. Auto-incremented numeric value managed by the database.
-   * Use this for relations between tables.
-   */
   id: int("id").autoincrement().primaryKey(),
-  /** Manus OAuth identifier (openId) returned from the OAuth callback. Unique per user. */
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
@@ -25,4 +15,20 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-// TODO: Add your tables here
+// Inspections table — stores every OSHA analysis result
+export const inspections = mysqlTable("inspections", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  status: mysqlEnum("status", ["violation", "clear", "unclear"]).notNull(),
+  headline: varchar("headline", { length: 255 }).notNull(),
+  citation: varchar("citation", { length: 100 }).notNull().default(""),
+  analysis: text("analysis").notNull(),
+  severity: varchar("severity", { length: 64 }).notNull().default("none"),
+  maxPenalty: varchar("maxPenalty", { length: 64 }).notNull().default("N/A"),
+  confidence: int("confidence").notNull().default(0),
+  fullResult: text("fullResult").notNull(), // JSON blob
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Inspection = typeof inspections.$inferSelect;
+export type InsertInspection = typeof inspections.$inferInsert;
