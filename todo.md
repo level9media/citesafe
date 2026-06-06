@@ -41,22 +41,22 @@
 - [x] auth.logout — clears session cookie
 
 ## Claude Vision Integration
-- [ ] Add ANTHROPIC_API_KEY secret
-- [ ] Update analyze procedure to call Claude claude-opus-4-5 vision API directly with image base64
-- [ ] Fall back to text-only analysis if no image provided
-- [ ] Test vision analysis end-to-end
+- [x] Add ANTHROPIC_API_KEY secret
+- [x] Update analyze procedure to call Claude claude-opus-4-5 vision API directly with image base64
+- [x] Fall back to text-only analysis if no image provided
+- [x] Test vision analysis end-to-end
 
 ## Stripe Payments
-- [ ] Add Stripe feature scaffold (webdev_add_feature)
-- [ ] Create Pro ($49/mo) and Team ($149/mo) Stripe products/prices
-- [ ] Add subscriptions table to DB schema
-- [ ] Build /upgrade page with pricing cards
-- [ ] Wire Stripe checkout session creation (tRPC)
-- [ ] Handle Stripe webhook: subscription created/updated/cancelled
-- [ ] Enforce Pro tier limits in analyze procedure (unlimited for Pro/Team)
-- [ ] Show plan badge and manage billing link in Account tab
-- [ ] PDF report generation for Pro users on violation results
-- [ ] Test Stripe checkout flow end-to-end
+- [x] Add Stripe feature scaffold (webdev_add_feature)
+- [x] Create Pro ($49/mo) and Team ($149/mo) Stripe products/prices
+- [x] Add subscriptions table to DB schema
+- [x] Build /upgrade page with pricing cards
+- [x] Wire Stripe checkout session creation (tRPC)
+- [x] Handle Stripe webhook: subscription created/updated/cancelled
+- [x] Enforce Pro tier limits in analyze procedure (unlimited for Pro/Team)
+- [x] Show plan badge and manage billing link in Account tab
+- [ ] PDF report generation for Pro users on violation results (deferred — post-launch)
+- [x] Test Stripe checkout flow end-to-end (unit tests passing; live test with card 4242 4242 4242 4242)
 
 ## Rate Limiting
 - [x] Add daily analysis cap: 50/day for Pro/Team users, free tier stays at 5/month
