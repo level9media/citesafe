@@ -112,3 +112,16 @@ temp/
 # Manus version file (auto-generated, not part of source)
 client/public/__manus__/version.json
 .project-config.json
+
+# Capacitor / iOS / Android
+ios/
+android/
+.capacitor/
+capacitor.config.json.bak
+
+# Drizzle generated migrations (keep schema, ignore generated SQL)
+drizzle/migrations/
+
+# Screenshots and local uploads
+screenshots/
+.manus-logs/
