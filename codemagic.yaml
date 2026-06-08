@@ -10,7 +10,6 @@ workflows:
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.levelninemedia.citesafe
-        provisioning_profile_specifier: CiteSafe1
       vars:
         BUNDLE_ID: com.levelninemedia.citesafe
         XCODE_WORKSPACE: ios/App/App.xcworkspace
