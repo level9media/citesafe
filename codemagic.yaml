@@ -10,8 +10,7 @@ workflows:
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.levenninemedia.citesafe
-        team_id: U2PT554FKN
-        team_id: U2PT554FKN
+
       vars:
         APP_STORE_APPLE_ID: 1234567890  # Replace with your App Store numeric ID after creating app in App Store Connect
         BUNDLE_ID: com.levenninemedia.citesafe
@@ -79,8 +78,7 @@ workflows:
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.levenninemedia.citesafe
-        team_id: U2PT554FKN
-        team_id: U2PT554FKN
+
       vars:
         BUNDLE_ID: com.levenninemedia.citesafe
         XCODE_PROJECT: ios/App/App.xcodeproj
