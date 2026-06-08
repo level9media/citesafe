@@ -9,9 +9,9 @@ workflows:
     environment:
       ios_signing:
         distribution_type: app_store
-        bundle_identifier: com.levenninemedia.citesafe
+        bundle_identifier: com.levelninemedia.citesafe
       vars:
-        BUNDLE_ID: com.levenninemedia.citesafe
+        BUNDLE_ID: com.levelninemedia.citesafe
         XCODE_WORKSPACE: ios/App/App.xcworkspace
         XCODE_SCHEME: App
         APPLE_TEAM_ID: U2PT554FKN

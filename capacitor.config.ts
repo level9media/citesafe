@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.levenninemedia.citesafe',
+  appId: 'com.levelninemedia.citesafe',
   appName: 'CiteSafe',
   webDir: 'dist',
   server: {
