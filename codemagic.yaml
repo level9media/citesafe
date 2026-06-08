@@ -1,0 +1,108 @@
+workflows:
+  ios-app-store:
+    name: CiteSafe iOS App Store
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    integrations:
+      app_store_connect: codemagic_api_key  # Set up in Codemagic UI: Teams > Integrations > App Store Connect
+
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.levenninemedia.citesafe
+      vars:
+        APP_STORE_APPLE_ID: 1234567890  # Replace with your App Store app ID after creating it in App Store Connect
+        BUNDLE_ID: com.levenninemedia.citesafe
+        XCODE_PROJECT: ios/App/App.xcodeproj
+        XCODE_SCHEME: App
+      node: 22.13.0
+
+    triggering:
+      events:
+        - tag
+      tag_patterns:
+        - pattern: 'v*'
+          include: true
+
+    scripts:
+      - name: Install pnpm
+        script: |
+          npm install -g pnpm
+
+      - name: Install dependencies
+        script: |
+          pnpm install
+
+      - name: Build web app
+        script: |
+          pnpm build
+
+      - name: Install Capacitor iOS platform
+        script: |
+          npx cap add ios || true
+          npx cap sync ios
+
+      - name: Set iOS version
+        script: |
+          LATEST_BUILD_NUMBER=$(app-store-connect get-latest-app-store-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || echo "0")
+          agvtool new-version -all $(($LATEST_BUILD_NUMBER + 1))
+        working_directory: ios/App
+
+      - name: Build iOS app
+        script: |
+          xcode-project use-profiles
+          xcode-project build-ipa \
+            --project "$XCODE_PROJECT" \
+            --scheme "$XCODE_SCHEME"
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        submit_to_app_store: false  # Set to true when ready for full App Store release
+        expire_build_submitted_for_review: true
+
+  ios-testflight:
+    name: CiteSafe TestFlight (Manual)
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.levenninemedia.citesafe
+      vars:
+        BUNDLE_ID: com.levenninemedia.citesafe
+        XCODE_PROJECT: ios/App/App.xcodeproj
+        XCODE_SCHEME: App
+      node: 22.13.0
+
+    scripts:
+      - name: Install pnpm
+        script: npm install -g pnpm
+
+      - name: Install dependencies
+        script: pnpm install
+
+      - name: Build web app
+        script: pnpm build
+
+      - name: Sync Capacitor
+        script: |
+          npx cap add ios || true
+          npx cap sync ios
+
+      - name: Build IPA
+        script: |
+          xcode-project use-profiles
+          xcode-project build-ipa \
+            --project "$XCODE_PROJECT" \
+            --scheme "$XCODE_SCHEME"
+
+    artifacts:
+      - build/ios/ipa/*.ipa
