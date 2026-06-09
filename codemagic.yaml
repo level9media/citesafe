@@ -7,6 +7,9 @@ workflows:
       app_store_connect: CiteSafeKey
 
     environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.levelninemedia.citesafe
       vars:
         BUNDLE_ID: com.levelninemedia.citesafe
         XCODE_WORKSPACE: ios/App/App.xcworkspace
@@ -38,18 +41,8 @@ workflows:
           npx cap add ios || true
           npx cap sync ios
 
-      - name: Set up code signing
-        script: |
-          # Decode the base64 private key into a PEM file
-          echo "$CM_CERTIFICATE_PRIVATE_KEY" | base64 --decode > /tmp/private_key.pem
-          # Fetch or create the provisioning profile using the stored cert + private key
-          app-store-connect fetch-signing-files \
-            "$BUNDLE_ID" \
-            --platform IOS \
-            --type IOS_APP_STORE \
-            --certificate-key @file:/tmp/private_key.pem \
-            --create
-          keychain add-certificates
+      - name: Set up code signing settings
+        script: xcode-project use-profiles
 
       - name: Set build number
         script: |
@@ -58,9 +51,6 @@ workflows:
 
       - name: Build IPA
         script: |
-          xcode-project use-profiles \
-            --workspace "$XCODE_WORKSPACE" \
-            --scheme "$XCODE_SCHEME"
           xcode-project build-ipa \
             --workspace "$XCODE_WORKSPACE" \
             --scheme "$XCODE_SCHEME"
