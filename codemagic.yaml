@@ -12,7 +12,8 @@ workflows:
         bundle_identifier: com.levelninemedia.citesafe
       vars:
         BUNDLE_ID: com.levelninemedia.citesafe
-        XCODE_WORKSPACE: ios/App/App.xcworkspace
+        # FIX 2: Capacitor 8 uses SPM — no standalone App.xcworkspace, use xcodeproj directly
+        XCODE_PROJECT: ios/App/App.xcodeproj
         XCODE_SCHEME: App
         APPLE_TEAM_ID: U2PT554FKN
       node: 22.13.0
@@ -34,34 +35,39 @@ workflows:
         script: pnpm install
 
       - name: Build web app
-        script: pnpm build
-
-      - name: Install Capacitor CLI
         script: |
-          npm install -g @capacitor/cli || true
-          npx cap --version
+          pnpm build
+          # Verify dist was created — cap sync will fail silently without it
+          ls -la dist/index.html || (echo "ERROR: dist/index.html missing" && exit 1)
 
-      - name: Add iOS platform
+      - name: Generate iOS platform
         script: |
           # ios/ is gitignored — must generate fresh every build
-          npx cap add ios 2>/dev/null || true
-          npx cap sync ios
-          echo "iOS platform ready:"
-          ls -la ios/App/
+          # FIX 1: use local node_modules/.bin/cap (already installed via pnpm install)
+          node_modules/.bin/cap add ios 2>/dev/null || true
+          node_modules/.bin/cap sync ios
+          echo "=== iOS platform structure ==="
+          find ios/App -maxdepth 3 -name "*.xcworkspace" -o -name "*.xcodeproj" -o -name "Info.plist" | sort
 
       - name: Set up code signing settings
         script: xcode-project use-profiles
 
       - name: Set build number
         script: |
+          # FIX 3: Use agvtool to set CURRENT_PROJECT_VERSION in pbxproj (not PlistBuddy on Info.plist)
+          # Info.plist uses $(CURRENT_PROJECT_VERSION) variable — must set it in the project
           BUILD_NUMBER=$(($(app-store-connect get-latest-testflight-build-number "$BUNDLE_ID" --platform IOS 2>/dev/null || echo 0) + 1))
-          echo "Setting build number: $BUILD_NUMBER"
-          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" ios/App/App/Info.plist
+          echo "Setting build number to: $BUILD_NUMBER"
+          cd ios/App
+          xcrun agvtool new-version -all $BUILD_NUMBER
+          cd ../..
 
       - name: Build IPA
         script: |
+          # FIX 2: Capacitor 8 SPM — correct workspace path is inside xcodeproj, not App.xcworkspace
+          # FIX 4: Use --project flag with App scheme (no separate .xcscheme file in SPM setup)
           xcode-project build-ipa \
-            --workspace "$XCODE_WORKSPACE" \
+            --project "$XCODE_PROJECT" \
             --scheme "$XCODE_SCHEME"
 
     artifacts:
