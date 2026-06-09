@@ -36,10 +36,18 @@ workflows:
       - name: Build web app
         script: pnpm build
 
+      - name: Install Capacitor CLI
+        script: |
+          npm install -g @capacitor/cli || true
+          npx cap --version
+
       - name: Add iOS platform
         script: |
-          npx cap add ios || true
+          # ios/ is gitignored — must generate fresh every build
+          npx cap add ios 2>/dev/null || true
           npx cap sync ios
+          echo "iOS platform ready:"
+          ls -la ios/App/
 
       - name: Set up code signing settings
         script: xcode-project use-profiles
@@ -47,6 +55,7 @@ workflows:
       - name: Set build number
         script: |
           BUILD_NUMBER=$(($(app-store-connect get-latest-testflight-build-number "$BUNDLE_ID" --platform IOS 2>/dev/null || echo 0) + 1))
+          echo "Setting build number: $BUILD_NUMBER"
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" ios/App/App/Info.plist
 
       - name: Build IPA
