@@ -47,7 +47,7 @@ workflows:
             "$BUNDLE_ID" \
             --platform IOS \
             --type IOS_APP_STORE \
-            --certificate-key /tmp/private_key.pem \
+            --certificate-key @file:/tmp/private_key.pem \
             --create
           keychain add-certificates
 
