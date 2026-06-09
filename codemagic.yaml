@@ -37,8 +37,8 @@ workflows:
       - name: Build web app
         script: |
           pnpm build
-          # Verify dist was created — cap sync will fail silently without it
-          ls -la dist/index.html || (echo "ERROR: dist/index.html missing" && exit 1)
+          # Verify dist was created — Vite outputs to dist/public/, cap sync needs this
+          ls -la dist/public/index.html || (echo "ERROR: dist/public/index.html missing" && exit 1)
 
       - name: Generate iOS platform
         script: |
