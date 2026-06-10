@@ -44,16 +44,21 @@ workflows:
           node_modules/.bin/cap add ios 2>/dev/null || true
           node_modules/.bin/cap sync ios
 
+      - name: Inject app icon
+        script: |
+          # Copy pre-built AppIcon.appiconset from repo into the generated iOS project
+          ICON_DEST="ios/App/App/Assets.xcassets/AppIcon.appiconset"
+          echo "Copying icons to $ICON_DEST"
+          cp -r ios-assets/AppIcon.appiconset/. "$ICON_DEST/"
+          echo "=== Icon files in place ==="
+          ls "$ICON_DEST/"
+
       - name: Set build number
         script: |
-          # Use BUILD_NUMBER env var provided by Codemagic, offset by 100 to exceed Apple's existing build 1
           EFFECTIVE_BUILD=$((BUILD_NUMBER + 100))
           echo "Codemagic BUILD_NUMBER=$BUILD_NUMBER, EFFECTIVE_BUILD=$EFFECTIVE_BUILD"
-          # Set CFBundleVersion directly in Info.plist using PlistBuddy
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $EFFECTIVE_BUILD" ios/App/App/Info.plist
-          # Also set CURRENT_PROJECT_VERSION in the Xcode project via agvtool
           cd ios/App && xcrun agvtool new-version -all $EFFECTIVE_BUILD && cd ../..
-          # Verify
           echo "=== CFBundleVersion in Info.plist ==="
           /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" ios/App/App/Info.plist
 
