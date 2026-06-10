@@ -20,10 +20,11 @@ workflows:
 
     triggering:
       events:
-        - tag
-      tag_patterns:
-        - pattern: 'v*'
+        - push
+      branch_patterns:
+        - pattern: 'main'
           include: true
+          source: true
 
     scripts:
       - name: Install pnpm
@@ -40,27 +41,42 @@ workflows:
           # Verify dist was created — Vite outputs to dist/public/, cap sync needs this
           ls -la dist/public/index.html || (echo "ERROR: dist/public/index.html missing" && exit 1)
 
+      - name: Set build number
+        script: |
+          # Patch capacitor.config.ts BEFORE cap add ios so the version is baked in from the start
+          # This is the only reliable method — patching after generation gets overwritten
+          # Add offset of 100 so build number is always > 1 (Apple already has build 1)
+          EFFECTIVE_BUILD=$((BUILD_NUMBER + 100))
+          echo "BUILD_NUMBER=$BUILD_NUMBER, EFFECTIVE_BUILD=$EFFECTIVE_BUILD"
+          node -e "
+            const fs = require('fs');
+            const buildNum = process.env.EFFECTIVE_BUILD || '101';
+            let cfg = fs.readFileSync('capacitor.config.ts', 'utf8');
+            // Remove any existing buildNumber lines to avoid duplicates
+            cfg = cfg.replace(/\\n\\s*buildNumber:.*,/g, '');
+            // Inject buildNumber into ios block
+            cfg = cfg.replace(
+              /ios: \\{/,
+              'ios: {\\n    buildNumber: \'' + buildNum + '\',' 
+            );
+            fs.writeFileSync('capacitor.config.ts', cfg);
+            console.log('capacitor.config.ts updated with buildNumber:', buildNum);
+          "
+          cat capacitor.config.ts
+
       - name: Generate iOS platform
         script: |
           # ios/ is gitignored — must generate fresh every build
-          # FIX 1: use local node_modules/.bin/cap (already installed via pnpm install)
+          # Build number is already injected into capacitor.config.ts above
           node_modules/.bin/cap add ios 2>/dev/null || true
           node_modules/.bin/cap sync ios
           echo "=== iOS platform structure ==="
           find ios/App -maxdepth 3 -name "*.xcworkspace" -o -name "*.xcodeproj" -o -name "Info.plist" | sort
+          echo "=== Verifying build number in Info.plist ==="
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' ios/App/App/Info.plist
 
       - name: Set up code signing settings
         script: xcode-project use-profiles
-
-      - name: Set build number
-        script: |
-          # FIX 3: Use agvtool to set CURRENT_PROJECT_VERSION in pbxproj (not PlistBuddy on Info.plist)
-          # Info.plist uses $(CURRENT_PROJECT_VERSION) variable — must set it in the project
-          BUILD_NUMBER=$(($(app-store-connect get-latest-testflight-build-number "$BUNDLE_ID" --platform IOS 2>/dev/null || echo 0) + 1))
-          echo "Setting build number to: $BUILD_NUMBER"
-          cd ios/App
-          xcrun agvtool new-version -all $BUILD_NUMBER
-          cd ../..
 
       - name: Build IPA
         script: |
