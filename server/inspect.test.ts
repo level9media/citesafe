@@ -77,13 +77,13 @@ describe("inspect.analyze", () => {
     expect(result.result.status).toBe("violation");
     expect(result.result.citations.length).toBeGreaterThan(0);
     expect(result.result.citations[0].code).toContain("CFR");
-    expect(result.usage.limit).toBe(5);
+    expect(result.usage.limit).toBe(3);
     expect(result.usage.period).toBe("month");
   });
 
   it("rejects when free tier monthly limit is reached", async () => {
     const { getInspectionCountThisMonth } = await import("./db");
-    vi.mocked(getInspectionCountThisMonth).mockResolvedValueOnce(5);
+    vi.mocked(getInspectionCountThisMonth).mockResolvedValueOnce(3);
     const caller = appRouter.createCaller(makeCtx());
     await expect(caller.inspect.analyze({ text: "Another inspection." })).rejects.toThrow(/Monthly limit reached/);
   });
@@ -110,7 +110,7 @@ describe("inspect.usageThisMonth", () => {
     const caller = appRouter.createCaller(makeCtx());
     const usage = await caller.inspect.usageThisMonth();
     expect(usage.used).toBe(2);
-    expect(usage.limit).toBe(5);
+    expect(usage.limit).toBe(3);
     expect(usage.plan).toBe("free");
   });
 
