@@ -219,62 +219,16 @@
 }
 
 /* ── Native iOS UX Fixes ─────────────────────────────────────────────────────
-   Makes the Capacitor WebView feel like a real native app on iOS.
+   Scoped to .native-platform class added by Capacitor on iOS/Android only.
+   Web browsers are NOT affected — normal scrolling is preserved on web.
    ────────────────────────────────────────────────────────────────────────── */
 
-/* Prevent text selection and tap highlight (native apps don't have these) */
+/* Tap highlight removal — safe for all platforms */
 * {
-  -webkit-user-select: none;
-  user-select: none;
-  touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Allow text selection in inputs */
-input, textarea, [contenteditable] {
-  -webkit-user-select: text;
-  user-select: text;
-}
-
-/* Prevent overscroll bounce — the #1 thing that makes it feel like a browser */
-html {
-  overscroll-behavior: none;
-  height: 100%;
-}
-body {
-  overscroll-behavior: none;
-  height: 100%;
-  position: fixed;
-  width: 100%;
-}
-
-/* App root fills the screen */
-#root {
-  height: 100%;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-/* iOS momentum scrolling for scrollable containers */
-.native-scroll {
-  -webkit-overflow-scrolling: touch;
-  overflow-y: auto;
-  overscroll-behavior-y: contain;
-}
-
-/* Prevent zoom on input focus (iOS zooms when font-size < 16px) */
-input[type="text"],
-input[type="email"],
-input[type="password"],
-input[type="search"],
-input[type="number"],
-textarea,
-select {
-  font-size: max(16px, 1em) !important;
-}
-
-/* Button press scale feedback — feels native */
+/* Button press scale feedback — safe for all platforms */
 @media (prefers-reduced-motion: no-preference) {
   button:active:not(:disabled),
   [role="button"]:active {
@@ -283,8 +237,67 @@ select {
   }
 }
 
-/* Safe area utility classes */
+/* Safe area utility classes — safe for all platforms (fallback to 0px on web) */
 .pt-safe { padding-top: env(safe-area-inset-top, 0px); }
 .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
 .mt-safe { margin-top: env(safe-area-inset-top, 0px); }
 .mb-safe { margin-bottom: env(safe-area-inset-bottom, 0px); }
+
+/* iOS momentum scrolling for scrollable containers — safe for all platforms */
+.native-scroll {
+  -webkit-overflow-scrolling: touch;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
+/* ── NATIVE PLATFORM ONLY (Capacitor iOS/Android) ───────────────────────────
+   These rules are applied only when the .native-platform class is present
+   on <html>, which is set by CiteSafeApp.tsx via Capacitor.isNativePlatform().
+   They MUST NOT apply on web — they break scrolling in browsers.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* Prevent text selection and tap highlight (native apps don't have these) */
+html.native-platform * {
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+/* Allow text selection in inputs on native */
+html.native-platform input,
+html.native-platform textarea,
+html.native-platform [contenteditable] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Prevent overscroll bounce — the #1 thing that makes it feel like a browser */
+html.native-platform {
+  overscroll-behavior: none;
+  height: 100%;
+}
+html.native-platform body {
+  overscroll-behavior: none;
+  height: 100%;
+  position: fixed;
+  width: 100%;
+}
+
+/* App root fills the screen on native */
+html.native-platform #root {
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Prevent zoom on input focus (iOS zooms when font-size < 16px) */
+html.native-platform input[type="text"],
+html.native-platform input[type="email"],
+html.native-platform input[type="password"],
+html.native-platform input[type="search"],
+html.native-platform input[type="number"],
+html.native-platform textarea,
+html.native-platform select {
+  font-size: max(16px, 1em) !important;
+}

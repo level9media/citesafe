@@ -799,6 +799,8 @@ export default function CiteSafeApp() {
   // Set native status bar style on mount (iOS only)
   useEffect(() => {
     if (Capacitor.isNativePlatform()) {
+      // Scope native-only CSS rules to this platform
+      document.documentElement.classList.add('native-platform');
       StatusBar.setStyle({ style: Style.Dark }).catch(() => {});
       StatusBar.setBackgroundColor({ color: '#1F2224' }).catch(() => {});
     }
