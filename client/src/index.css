@@ -42,6 +42,12 @@
   --color-sidebar-ring: var(--sidebar-ring);
 
   /* CiteSafe custom colors */
+  --color-cs-gold: var(--cs-gold);
+  --color-cs-gold-light: var(--cs-gold-light);
+  --color-cs-gold-border: var(--cs-gold-border);
+  --color-cs-dark: var(--cs-dark);
+  --color-cs-near-black: var(--cs-near-black);
+  --color-cs-cream: var(--cs-cream);
   --color-cs-red: var(--cs-red);
   --color-cs-red-light: var(--cs-red-light);
   --color-cs-red-border: var(--cs-red-border);
@@ -53,53 +59,61 @@
 }
 
 :root {
-  /* CiteSafe brand: black + red on white */
-  --primary: oklch(0.42 0.21 25);           /* deep red */
-  --primary-foreground: oklch(1 0 0);
-  --sidebar-primary: oklch(0.42 0.21 25);
-  --sidebar-primary-foreground: oklch(1 0 0);
+  /* CiteSafe brand: black + gold on white — #F2C230 gold, #2F3133 dark */
+  --primary: oklch(0.80 0.16 85);           /* #F2C230 gold */
+  --primary-foreground: oklch(0.15 0.005 285); /* dark text on gold */
+  --sidebar-primary: oklch(0.80 0.16 85);
+  --sidebar-primary-foreground: oklch(0.15 0.005 285);
 
-  --radius: 0.5rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.13 0.005 285);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.13 0.005 285);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.13 0.005 285);
-  --secondary: oklch(0.97 0.001 286);
-  --secondary-foreground: oklch(0.35 0.01 285);
-  --muted: oklch(0.96 0.002 286);
-  --muted-foreground: oklch(0.52 0.016 286);
-  --accent: oklch(0.96 0.002 286);
-  --accent-foreground: oklch(0.13 0.005 285);
-  --destructive: oklch(0.42 0.21 25);
+  --radius: 0.625rem;
+  /* Dark theme — #1F2224 bg, #2F3133 card, #F3EFE6 text */
+  --background: oklch(0.155 0.005 285);    /* #1F2224 */
+  --foreground: oklch(0.97 0.008 85);      /* #F3EFE6 cream */
+  --card: oklch(0.20 0.005 285);           /* #2F3133 */
+  --card-foreground: oklch(0.97 0.008 85);
+  --popover: oklch(0.20 0.005 285);
+  --popover-foreground: oklch(0.97 0.008 85);
+  --secondary: oklch(0.25 0.005 285);      /* slightly lighter card */
+  --secondary-foreground: oklch(0.97 0.008 85);
+  --muted: oklch(0.25 0.005 285);
+  --muted-foreground: oklch(0.65 0.008 85); /* dimmed cream */
+  --accent: oklch(0.25 0.005 285);
+  --accent-foreground: oklch(0.97 0.008 85);
+  --destructive: oklch(0.55 0.22 25);      /* red for violations */
   --destructive-foreground: oklch(1 0 0);
-  --border: oklch(0.91 0.004 286);
-  --input: oklch(0.91 0.004 286);
-  --ring: oklch(0.42 0.21 25);
+  --border: oklch(0.28 0.005 285);         /* subtle dark border */
+  --input: oklch(0.25 0.005 285);
+  --ring: oklch(0.80 0.16 85);             /* gold ring */
 
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.13 0.005 285);
-  --sidebar-accent: oklch(0.96 0.002 286);
-  --sidebar-accent-foreground: oklch(0.13 0.005 285);
-  --sidebar-border: oklch(0.91 0.004 286);
-  --sidebar-ring: oklch(0.42 0.21 25);
+  --sidebar: oklch(0.20 0.005 285);
+  --sidebar-foreground: oklch(0.97 0.008 85);
+  --sidebar-accent: oklch(0.25 0.005 285);
+  --sidebar-accent-foreground: oklch(0.97 0.008 85);
+  --sidebar-border: oklch(0.28 0.005 285);
+  --sidebar-ring: oklch(0.80 0.16 85);
 
-  --chart-1: oklch(0.42 0.21 25);
-  --chart-2: oklch(0.55 0.18 25);
-  --chart-3: oklch(0.65 0.14 25);
-  --chart-4: oklch(0.75 0.10 25);
-  --chart-5: oklch(0.85 0.06 25);
+  --chart-1: oklch(0.80 0.16 85);  /* gold */
+  --chart-2: oklch(0.55 0.18 25);  /* red */
+  --chart-3: oklch(0.44 0.14 155); /* green */
+  --chart-4: oklch(0.62 0.16 60);  /* amber */
+  --chart-5: oklch(0.20 0.005 285); /* near-black */
 
-  /* Semantic status colors */
-  --cs-red: oklch(0.42 0.21 25);
+  /* CiteSafe brand palette */
+  --cs-gold: oklch(0.80 0.16 85);         /* #F2C230 */
+  --cs-gold-light: oklch(0.96 0.06 85);
+  --cs-gold-border: oklch(0.88 0.10 85);
+  --cs-dark: oklch(0.22 0.005 285);       /* #2F3133 */
+  --cs-near-black: oklch(0.15 0.005 285); /* #1F2224 */
+  --cs-cream: oklch(0.97 0.008 85);       /* #F3EFE6 */
+  /* Semantic status colors (keep for violation/clear/unclear UI) */
+  --cs-red: oklch(0.55 0.22 25);
   --cs-red-light: oklch(0.97 0.04 25);
   --cs-red-border: oklch(0.88 0.08 25);
   --cs-amber: oklch(0.62 0.16 60);
   --cs-amber-light: oklch(0.97 0.04 60);
   --cs-green: oklch(0.44 0.14 155);
   --cs-green-light: oklch(0.96 0.04 155);
-  --cs-stripe: oklch(0.72 0.17 85);   /* caution yellow */
+  --cs-stripe: oklch(0.80 0.16 85);   /* gold caution stripe */
 }
 
 @layer base {
@@ -203,3 +217,74 @@
   }
   .fade-up { animation: fade-up 0.3s ease both; }
 }
+
+/* ── Native iOS UX Fixes ─────────────────────────────────────────────────────
+   Makes the Capacitor WebView feel like a real native app on iOS.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* Prevent text selection and tap highlight (native apps don't have these) */
+* {
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Allow text selection in inputs */
+input, textarea, [contenteditable] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Prevent overscroll bounce — the #1 thing that makes it feel like a browser */
+html {
+  overscroll-behavior: none;
+  height: 100%;
+}
+body {
+  overscroll-behavior: none;
+  height: 100%;
+  position: fixed;
+  width: 100%;
+}
+
+/* App root fills the screen */
+#root {
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* iOS momentum scrolling for scrollable containers */
+.native-scroll {
+  -webkit-overflow-scrolling: touch;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
+/* Prevent zoom on input focus (iOS zooms when font-size < 16px) */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="search"],
+input[type="number"],
+textarea,
+select {
+  font-size: max(16px, 1em) !important;
+}
+
+/* Button press scale feedback — feels native */
+@media (prefers-reduced-motion: no-preference) {
+  button:active:not(:disabled),
+  [role="button"]:active {
+    transform: scale(0.97);
+    transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+}
+
+/* Safe area utility classes */
+.pt-safe { padding-top: env(safe-area-inset-top, 0px); }
+.pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
+.mt-safe { margin-top: env(safe-area-inset-top, 0px); }
+.mb-safe { margin-bottom: env(safe-area-inset-bottom, 0px); }

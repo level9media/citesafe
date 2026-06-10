@@ -1,12 +1,13 @@
+import { Capacitor } from "@capacitor/core";
+import { Haptics, ImpactStyle } from "@capacitor/haptics";
+import { StatusBar, Style } from "@capacitor/status-bar";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import {
-  Home,
+  Camera,
   Search,
   ClipboardList,
   User,
@@ -16,7 +17,6 @@ import {
   CheckCircle,
   HelpCircle,
   Upload,
-  Camera,
   X,
   FileText,
   RotateCcw,
@@ -24,14 +24,15 @@ import {
   Shield,
   TrendingUp,
   Calendar,
-  Filter,
+  MapPin,
+  Zap,
 } from "lucide-react";
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useLocation } from "wouter";
 import type { InspectionResult } from "@shared/types";
 import type { Inspection } from "../../../drizzle/schema";
 
-type Tab = "home" | "inspect" | "history" | "account";
+type Tab = "inspect" | "history" | "account";
 type InspectView = "form" | "loading" | "result";
 
 const SAMPLE_PROMPTS = [
@@ -41,196 +42,50 @@ const SAMPLE_PROMPTS = [
   "Trench about 5 feet deep with no shoring, no ladder, and no spoil pile setback.",
 ];
 
-function StatusBadge({ status }: { status: string }) {
+// ── Severity dot ─────────────────────────────────────────────────────────────
+function SeverityDot({ status }: { status: string }) {
+  if (status === "violation") return <span className="w-2.5 h-2.5 rounded-full bg-red-500 flex-shrink-0 mt-0.5" />;
+  if (status === "clear") return <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 flex-shrink-0 mt-0.5" />;
+  return <span className="w-2.5 h-2.5 rounded-full bg-[#F2C230] flex-shrink-0 mt-0.5" />;
+}
+
+// ── Compliance verdict banner ─────────────────────────────────────────────────
+function ComplianceVerdict({ status }: { status: string }) {
   if (status === "violation") {
     return (
-      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold badge-violation">
-        <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
-        Violation Found
-      </span>
+      <div className="flex items-center gap-3 bg-red-600/20 border border-red-500/40 rounded-xl px-4 py-3">
+        <div className="w-8 h-8 rounded-lg bg-red-500/20 flex items-center justify-center flex-shrink-0">
+          <AlertTriangle className="w-4 h-4 text-red-400" />
+        </div>
+        <div>
+          <p className="text-sm font-bold text-red-400 uppercase tracking-wide">NOT COMPLIANT</p>
+          <p className="text-xs text-red-300/80">OSHA Violation Found</p>
+        </div>
+      </div>
     );
   }
   if (status === "clear") {
     return (
-      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold badge-clear">
-        <span className="w-1.5 h-1.5 rounded-full bg-current" />
-        No Violation
-      </span>
+      <div className="flex items-center gap-3 bg-emerald-600/20 border border-emerald-500/40 rounded-xl px-4 py-3">
+        <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+          <CheckCircle className="w-4 h-4 text-emerald-400" />
+        </div>
+        <div>
+          <p className="text-sm font-bold text-emerald-400 uppercase tracking-wide">COMPLIANT</p>
+          <p className="text-xs text-emerald-300/80">No Violations Detected</p>
+        </div>
+      </div>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold badge-unclear">
-      <span className="w-1.5 h-1.5 rounded-full bg-current" />
-      Needs Clarification
-    </span>
-  );
-}
-
-function StatusBar({ status }: { status: string }) {
-  const colors: Record<string, string> = {
-    violation: "bg-[var(--cs-red)]",
-    clear: "bg-[var(--cs-green)]",
-    unclear: "bg-[var(--cs-amber)]",
-  };
-  return <div className={`h-1 w-full rounded-t-lg ${colors[status] ?? "bg-border"}`} />;
-}
-
-// ── Home Tab ──────────────────────────────────────────────────────────────────
-function HomeTab({
-  onStartInspect,
-  onGoHistory,
-  onGoAccount,
-}: {
-  onStartInspect: () => void;
-  onGoHistory: () => void;
-  onGoAccount: () => void;
-}) {
-  const { user } = useAuth();
-  const { data: usage } = trpc.inspect.usageThisMonth.useQuery();
-  const { data: history } = trpc.history.list.useQuery();
-  const { data: sub } = trpc.billing.getSubscription.useQuery();
-
-  const used = usage?.used ?? 0;
-  const limit = usage?.limit ?? 5;
-  const period = usage?.period ?? "month";
-  const isPro = sub && (sub.status === "active" || sub.status === "trialing");
-  const pct = Math.round((used / limit) * 100);
-
-  const recent = (history ?? []).slice(0, 3);
-  const totalViolations = (history ?? []).filter((h: Inspection) => h.status === "violation").length;
-
-  return (
-    <div className="space-y-6">
-      {/* Hero card */}
-      <div className="rounded-xl border border-border overflow-hidden shadow-sm">
-        <div className="cs-stripe" />
-        <div className="p-6 bg-white">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight text-foreground leading-tight">
-                See a violation?<br />
-                <span className="text-[var(--cs-red)]">Cite it now.</span>
-              </h1>
-              <p className="mt-2 text-sm text-muted-foreground max-w-xs">
-                Photo or description — get the exact OSHA regulation in seconds.
-              </p>
-            </div>
-            <div className="hidden sm:flex items-center justify-center w-16 h-16 rounded-xl bg-[var(--cs-red-light)] border border-[var(--cs-red-border)] flex-shrink-0">
-              <Shield className="w-8 h-8 text-[var(--cs-red)]" />
-            </div>
-          </div>
-          <Button
-            className="mt-5 w-full sm:w-auto bg-[var(--cs-red)] hover:bg-[var(--cs-red)]/90 text-white font-semibold"
-            onClick={onStartInspect}
-          >
-            <Camera className="w-4 h-4 mr-2" />
-            Start Inspection
-          </Button>
-        </div>
+    <div className="flex items-center gap-3 bg-[#F2C230]/10 border border-[#F2C230]/30 rounded-xl px-4 py-3">
+      <div className="w-8 h-8 rounded-lg bg-[#F2C230]/10 flex items-center justify-center flex-shrink-0">
+        <HelpCircle className="w-4 h-4 text-[#F2C230]" />
       </div>
-
-      {/* Usage card */}
-      <div className="rounded-xl border border-border bg-white p-5 shadow-sm">
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            {isPro ? "Daily Analyses" : "Monthly Analyses"}
-          </span>
-          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-            isPro ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground"
-          }`}>
-            {isPro ? (sub.plan === "team" ? "Team" : "Pro") : "Free Tier"}
-          </span>
-        </div>
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-medium">{used} of {limit} used</span>
-          <span className="text-xs text-muted-foreground">{limit - used} remaining today</span>
-        </div>
-        <div className="h-2 bg-muted rounded-full overflow-hidden">
-          <div
-            className={`h-full rounded-full transition-all duration-500 ${
-              isPro ? "bg-emerald-500" : "bg-[var(--cs-red)]"
-            }`}
-            style={{ width: `${Math.min(pct, 100)}%` }}
-          />
-        </div>
-        {!isPro && (
-          <button
-            onClick={onGoAccount}
-            className="mt-2 text-xs font-medium text-[var(--cs-red)] hover:underline"
-          >
-            Upgrade to Pro for 50 analyses/day →
-          </button>
-        )}
+      <div>
+        <p className="text-sm font-bold text-[#F2C230] uppercase tracking-wide">NEEDS CLARIFICATION</p>
+        <p className="text-xs text-[#F2C230]/70">More Information Required</p>
       </div>
-
-      {/* Stats row */}
-      <div className="grid grid-cols-3 gap-3">
-        {[
-          { label: "Total", value: history?.length ?? 0, icon: ClipboardList, color: "text-foreground" },
-          { label: "Violations", value: totalViolations, icon: AlertTriangle, color: "text-[var(--cs-red)]" },
-          { label: "This Month", value: used, icon: Calendar, color: "text-foreground" },
-        ].map(stat => (
-          <div key={stat.label} className="rounded-xl border border-border bg-white p-4 text-center shadow-sm">
-            <stat.icon className={`w-4 h-4 mx-auto mb-1 ${stat.color}`} />
-            <div className={`text-2xl font-bold ${stat.color}`}>{stat.value}</div>
-            <div className="text-xs text-muted-foreground mt-0.5">{stat.label}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Recent analyses */}
-      {recent.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-              Recent Analyses
-            </span>
-            <button
-              onClick={onGoHistory}
-              className="text-xs font-medium text-[var(--cs-red)] hover:underline flex items-center gap-1"
-            >
-              View all <ChevronRight className="w-3 h-3" />
-            </button>
-          </div>
-          <div className="space-y-2">
-            {recent.map((item: Inspection) => (
-              <div key={item.id} className="rounded-xl border border-border bg-white overflow-hidden shadow-sm">
-                <StatusBar status={item.status} />
-                <div className="p-4">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">{item.headline}</p>
-                      <p className="text-xs text-[var(--cs-red)] font-mono mt-0.5">{item.citation}</p>
-                    </div>
-                    <StatusBadge status={item.status} />
-                  </div>
-                  <div className="flex items-center justify-between mt-2">
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(item.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                    </span>
-                    {item.status === "violation" && (
-                      <span className="text-xs font-medium text-[var(--cs-red)]">
-                        Up to {item.maxPenalty}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Welcome message if no history */}
-      {(history ?? []).length === 0 && (
-        <div className="rounded-xl border border-dashed border-border bg-muted/30 p-8 text-center">
-          <Shield className="w-10 h-10 mx-auto mb-3 text-muted-foreground/50" />
-          <p className="text-sm font-medium text-muted-foreground">No inspections yet</p>
-          <p className="text-xs text-muted-foreground mt-1">
-            Start your first inspection to see results here.
-          </p>
-        </div>
-      )}
     </div>
   );
 }
@@ -322,81 +177,56 @@ function InspectTab() {
     if (fileRef.current) fileRef.current.value = "";
   };
 
-  // ── Loading view ──
+  // ── Loading ──
   if (view === "loading") {
     return (
-      <div className="flex flex-col items-center justify-center py-20 gap-6">
-        <div className="relative w-20 h-20 rounded-2xl border-2 border-border bg-muted flex items-center justify-center overflow-hidden shadow-sm">
-          <Search className="w-8 h-8 text-muted-foreground" />
-          <div
-            className="scan-line absolute left-0 right-0 h-0.5 bg-[var(--cs-red)] opacity-80"
-            style={{ top: "0%" }}
-          />
+      <div className="flex flex-col items-center justify-center py-24 gap-6">
+        <div className="relative w-20 h-20 rounded-2xl border-2 border-[#F2C230]/30 bg-[#2F3133] flex items-center justify-center overflow-hidden">
+          <Search className="w-8 h-8 text-[#F2C230]/60" />
+          <div className="scan-line absolute left-0 right-0 h-0.5 bg-[#F2C230] opacity-80" style={{ top: "0%" }} />
         </div>
         <div className="text-center">
-          <p className="text-lg font-bold tracking-tight">Analyzing scene...</p>
-          <p className="text-sm text-muted-foreground mt-1">
-            Cross-referencing 29 CFR regulations
-          </p>
+          <p className="text-lg font-bold tracking-tight text-white">Analyzing scene...</p>
+          <p className="text-sm text-white/50 mt-1">Cross-referencing 29 CFR regulations</p>
         </div>
         <div className="flex gap-2">
           {[0, 1, 2].map(i => (
-            <div
-              key={i}
-              className="pulse-dot w-2 h-2 rounded-full bg-[var(--cs-red)]"
-              style={{ animationDelay: `${i * 0.2}s` }}
-            />
+            <div key={i} className="pulse-dot w-2 h-2 rounded-full bg-[#F2C230]" style={{ animationDelay: `${i * 0.2}s` }} />
           ))}
         </div>
       </div>
     );
   }
 
-  // ── Result view ──
+  // ── Result ──
   if (view === "result" && result) {
     const isViolation = result.status === "violation";
-    const isClear = result.status === "clear";
     const isUnclear = result.status === "unclear";
 
     return (
-      <div className="space-y-4 fade-up">
-        {/* Main result card */}
-        <div className="rounded-xl border border-border bg-white overflow-hidden shadow-sm">
-          <StatusBar status={result.status} />
-          <div className="p-5">
-            <div className="flex items-start justify-between gap-3 mb-4">
-              <div className="min-w-0">
-                <StatusBadge status={result.status} />
-                <h2 className="mt-2 text-lg font-bold text-foreground leading-tight">
-                  {result.headline}
-                </h2>
-              </div>
-              {result.confidence > 0 && (
-                <div className="text-right flex-shrink-0">
-                  <p className="text-xs text-muted-foreground">Confidence</p>
-                  <p className="text-2xl font-bold text-[var(--cs-red)]">
-                    {result.confidence}%
-                  </p>
-                </div>
-              )}
-            </div>
+      <div className="space-y-4 fade-up pb-4">
+        {/* Compliance verdict */}
+        <ComplianceVerdict status={result.status} />
 
-            {/* Clarification needed */}
+        {/* Main card */}
+        <div className="rounded-2xl bg-[#2F3133] border border-white/8 overflow-hidden">
+          <div className="px-5 pt-5 pb-4">
+            <p className="text-xs font-bold uppercase tracking-widest text-white/40 mb-3">AI ANALYSIS SUMMARY</p>
+
+            {/* Clarification */}
             {isUnclear && result.clarifyingQuestion && (
-              <div className="rounded-lg border border-[oklch(0.85_0.08_60)] bg-[var(--cs-amber-light)] p-4 mb-4">
-                <p className="text-xs font-semibold uppercase tracking-widest text-[var(--cs-amber)] mb-2">
-                  Clarification Needed
-                </p>
-                <p className="text-sm text-foreground">{result.clarifyingQuestion}</p>
+              <div className="rounded-xl border border-[#F2C230]/30 bg-[#F2C230]/5 p-4 mb-4">
+                <p className="text-xs font-semibold uppercase tracking-widest text-[#F2C230] mb-2">Clarification Needed</p>
+                <p className="text-sm text-white/80">{result.clarifyingQuestion}</p>
                 <textarea
-                  className="mt-3 w-full rounded-lg border border-border bg-white text-sm p-3 resize-none focus:outline-none focus:ring-2 focus:ring-[var(--cs-red)]/30 focus:border-[var(--cs-red)]"
+                  className="mt-3 w-full rounded-lg border border-white/10 bg-[#1F2224] text-sm text-white p-3 resize-none focus:outline-none focus:ring-2 focus:ring-[#F2C230]/30 focus:border-[#F2C230] placeholder:text-white/30"
                   rows={3}
                   placeholder="Type your answer here…"
                   value={clarifyText}
                   onChange={e => setClarifyText(e.target.value)}
                 />
                 <Button
-                  className="mt-2 w-full bg-[var(--cs-red)] hover:bg-[var(--cs-red)]/90 text-white"
+                  className="mt-2 w-full bg-[#F2C230] hover:bg-[#F2C230]/90 text-[#1F2224] font-bold"
                   onClick={submitClarification}
                   disabled={!clarifyText.trim()}
                 >
@@ -405,28 +235,22 @@ function InspectTab() {
               </div>
             )}
 
-            {/* Analysis */}
-            <div className="mb-4">
-              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">
-                Analysis
-              </p>
-              <p className="text-sm text-foreground leading-relaxed">{result.analysis}</p>
-            </div>
+            {/* Headline */}
+            <h2 className="text-base font-bold text-white leading-snug mb-3">{result.headline}</h2>
 
-            {/* Severity + Penalty */}
+            {/* Analysis */}
+            <p className="text-sm text-white/70 leading-relaxed mb-4">{result.analysis}</p>
+
+            {/* Severity + Penalty row */}
             {isViolation && (
               <div className="grid grid-cols-2 gap-3 mb-4">
-                <div className="rounded-lg border border-border bg-muted/30 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1">
-                    Violation Type
-                  </p>
-                  <p className="text-sm font-bold uppercase">{result.severity}</p>
+                <div className="rounded-xl bg-[#1F2224] border border-white/8 p-3">
+                  <p className="text-xs font-bold uppercase tracking-widest text-white/40 mb-1">Violation Type</p>
+                  <p className="text-sm font-bold text-white uppercase">{result.severity}</p>
                 </div>
-                <div className="rounded-lg border border-[var(--cs-red-border)] bg-[var(--cs-red-light)] p-3">
-                  <p className="text-xs font-semibold uppercase tracking-widest text-[var(--cs-red)] mb-1">
-                    Max Penalty
-                  </p>
-                  <p className="text-sm font-bold text-[var(--cs-red)]">{result.maxPenalty}</p>
+                <div className="rounded-xl bg-red-500/10 border border-red-500/30 p-3">
+                  <p className="text-xs font-bold uppercase tracking-widest text-red-400 mb-1">Max Penalty</p>
+                  <p className="text-sm font-bold text-red-400">{result.maxPenalty}</p>
                 </div>
               </div>
             )}
@@ -434,18 +258,17 @@ function InspectTab() {
             {/* Citations */}
             {result.citations?.length > 0 && (
               <div className="mb-4">
-                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">
-                  Applicable Regulations
-                </p>
+                <p className="text-xs font-bold uppercase tracking-widest text-white/40 mb-3">Applicable Regulations</p>
                 <div className="space-y-2">
                   {result.citations.map((c, i) => (
-                    <div
-                      key={i}
-                      className="rounded-lg border-l-4 border-[var(--cs-red)] border border-border bg-muted/20 p-3"
-                    >
-                      <p className="text-xs font-mono font-semibold text-[var(--cs-red)]">{c.code}</p>
-                      <p className="text-sm font-medium text-foreground mt-0.5">{c.title}</p>
-                      <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{c.relevance}</p>
+                    <div key={i} className="flex items-start gap-3 rounded-xl bg-[#1F2224] border border-white/8 p-3">
+                      <SeverityDot status={result.status} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-mono font-bold text-[#F2C230]">{c.code}</p>
+                        <p className="text-sm font-semibold text-white mt-0.5">{c.title}</p>
+                        <p className="text-xs text-white/50 mt-1 leading-relaxed">{c.relevance}</p>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-white/20 flex-shrink-0 mt-0.5" />
                     </div>
                   ))}
                 </div>
@@ -454,21 +277,27 @@ function InspectTab() {
 
             {/* Corrective action */}
             {isViolation && result.correctiveAction && (
-              <div className="rounded-lg border border-[var(--cs-red-border)] bg-[var(--cs-red-light)] p-4">
-                <p className="text-xs font-semibold uppercase tracking-widest text-[var(--cs-red)] mb-2">
-                  Required Corrective Action
-                </p>
-                <p className="text-sm text-foreground leading-relaxed">{result.correctiveAction}</p>
+              <div className="rounded-xl bg-[#F2C230]/8 border border-[#F2C230]/25 p-4">
+                <p className="text-xs font-bold uppercase tracking-widest text-[#F2C230] mb-2">Required Corrective Action</p>
+                <p className="text-sm text-white/80 leading-relaxed">{result.correctiveAction}</p>
               </div>
             )}
           </div>
+
+          {/* Confidence footer */}
+          {result.confidence > 0 && (
+            <div className="px-5 py-3 border-t border-white/8 flex items-center justify-between">
+              <span className="text-xs text-white/40">Analysis Confidence</span>
+              <span className="text-xs font-bold text-[#F2C230]">{result.confidence}%</span>
+            </div>
+          )}
         </div>
 
-        {/* Usage update */}
+        {/* Usage */}
         {usage && (
-          <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">Monthly usage</span>
-            <span className="text-xs font-medium">{usage.used} / {usage.limit} analyses used</span>
+          <div className="rounded-xl bg-[#2F3133] border border-white/8 px-4 py-3 flex items-center justify-between">
+            <span className="text-xs text-white/40">Monthly usage</span>
+            <span className="text-xs font-semibold text-white/70">{usage.used} / {usage.limit} analyses</span>
           </div>
         )}
 
@@ -477,17 +306,15 @@ function InspectTab() {
           {isViolation && (
             <Button
               variant="outline"
-              className="w-full border-[var(--cs-red)] text-[var(--cs-red)] hover:bg-[var(--cs-red-light)] opacity-60 cursor-not-allowed"
+              className="w-full border-white/15 text-white/40 cursor-not-allowed"
               disabled
-              title="Upgrade to Pro to download PDF reports"
             >
               <FileText className="w-4 h-4 mr-2" />
               Download PDF Report — Pro Feature
             </Button>
           )}
           <Button
-            variant="outline"
-            className="w-full"
+            className="w-full bg-[#F2C230] hover:bg-[#F2C230]/90 text-[#1F2224] font-bold h-11"
             onClick={resetInspect}
           >
             <RotateCcw className="w-4 h-4 mr-2" />
@@ -495,40 +322,26 @@ function InspectTab() {
           </Button>
         </div>
 
-        <p className="text-xs text-muted-foreground text-center leading-relaxed">
+        <p className="text-xs text-white/30 text-center leading-relaxed">
           CiteSafe is an AI analysis tool and does not constitute legal advice.
-          Consult a licensed attorney or CSP for legal proceedings.
         </p>
       </div>
     );
   }
 
-  // ── Form view ──
+  // ── Form ──
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 pb-4">
       <div>
-        <h2 className="text-xl font-bold tracking-tight">Inspect a Condition</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Upload a photo, describe what you see, or both.
-        </p>
+        <h2 className="text-2xl font-black tracking-tight text-white">Snap a Photo.<br /><span className="text-[#F2C230]">Get OSHA Answers.</span></h2>
+        <p className="text-sm text-white/50 mt-2">Upload a photo, describe what you see, or both.</p>
       </div>
 
-      {/* Image upload */}
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={handleFile}
-      />
+      <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
 
       {imagePreview ? (
-        <div className="relative rounded-xl overflow-hidden border border-border">
-          <img
-            src={imagePreview}
-            alt="Job site photo"
-            className="w-full max-h-56 object-cover"
-          />
+        <div className="relative rounded-2xl overflow-hidden border border-white/10">
+          <img src={imagePreview} alt="Job site photo" className="w-full max-h-56 object-cover" />
           <button
             onClick={clearImage}
             className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/70 text-white flex items-center justify-center hover:bg-black/90 transition-colors"
@@ -539,56 +352,49 @@ function InspectTab() {
       ) : (
         <div className="grid grid-cols-2 gap-3">
           {[
-            { icon: Camera, label: "Take Photo", capture: "environment" as const },
-            { icon: Upload, label: "Upload Image", capture: undefined },
+            { icon: Camera, label: "Take Photo" },
+            { icon: Upload, label: "Upload Image" },
           ].map(btn => (
             <button
               key={btn.label}
               onClick={() => fileRef.current?.click()}
-              className="flex flex-col items-center justify-center gap-2 h-24 rounded-xl border-2 border-dashed border-border bg-muted/30 hover:border-[var(--cs-red)] hover:bg-[var(--cs-red-light)] transition-all group"
+              className="flex flex-col items-center justify-center gap-2 h-28 rounded-2xl border-2 border-dashed border-white/15 bg-[#2F3133] hover:border-[#F2C230]/60 hover:bg-[#F2C230]/5 transition-all group"
             >
-              <btn.icon className="w-6 h-6 text-muted-foreground group-hover:text-[var(--cs-red)] transition-colors" />
-              <span className="text-xs font-medium text-muted-foreground group-hover:text-[var(--cs-red)] transition-colors">
-                {btn.label}
-              </span>
+              <btn.icon className="w-6 h-6 text-white/30 group-hover:text-[#F2C230] transition-colors" />
+              <span className="text-xs font-semibold text-white/40 group-hover:text-[#F2C230] transition-colors">{btn.label}</span>
             </button>
           ))}
         </div>
       )}
 
-      {/* Text input */}
       <textarea
-        className="w-full rounded-xl border border-border bg-white text-sm p-4 resize-none focus:outline-none focus:ring-2 focus:ring-[var(--cs-red)]/30 focus:border-[var(--cs-red)] placeholder:text-muted-foreground/60 transition-colors"
+        className="w-full rounded-2xl border border-white/10 bg-[#2F3133] text-sm text-white p-4 resize-none focus:outline-none focus:ring-2 focus:ring-[#F2C230]/30 focus:border-[#F2C230]/50 placeholder:text-white/25 transition-colors"
         rows={4}
         placeholder="Describe what you see… e.g. 'Worker on scaffold 15 ft high, no guardrails, no harness'"
         value={text}
         onChange={e => setText(e.target.value)}
       />
 
-      {/* Analyze button */}
       <Button
-        className="w-full bg-[var(--cs-red)] hover:bg-[var(--cs-red)]/90 text-white font-semibold h-11"
+        className="w-full bg-[#F2C230] hover:bg-[#F2C230]/90 text-[#1F2224] font-black text-base h-13 rounded-2xl"
         disabled={!canAnalyze}
         onClick={() => doAnalyze()}
       >
         {analyzeMutation.isPending ? (
           <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Analyzing…</>
         ) : (
-          <><Search className="w-4 h-4 mr-2" /> Analyze for Violations</>
+          <>VIEW FULL GUIDANCE</>
         )}
       </Button>
 
-      {/* Sample prompts */}
       <div>
-        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">
-          Sample Scenarios
-        </p>
+        <p className="text-xs font-bold uppercase tracking-widest text-white/30 mb-3">Sample Scenarios</p>
         <div className="space-y-2">
           {SAMPLE_PROMPTS.map((prompt, i) => (
             <button
               key={i}
               onClick={() => setText(prompt)}
-              className="w-full text-left rounded-lg border border-border bg-white hover:border-[var(--cs-red)] hover:bg-[var(--cs-red-light)] px-4 py-3 text-sm text-muted-foreground hover:text-foreground transition-all"
+              className="w-full text-left rounded-xl border border-white/8 bg-[#2F3133] hover:border-[#F2C230]/40 hover:bg-[#F2C230]/5 px-4 py-3 text-sm text-white/50 hover:text-white/80 transition-all"
             >
               {prompt}
             </button>
@@ -602,30 +408,20 @@ function InspectTab() {
 // ── History Tab ───────────────────────────────────────────────────────────────
 function HistoryTab() {
   const { data: history, isLoading } = trpc.history.list.useQuery();
-  const deleteMutation = trpc.history.delete.useMutation({
-    onSuccess: () => {
-      toast.success("Inspection deleted");
-    },
-  });
+  const deleteMutation = trpc.history.delete.useMutation();
   const utils = trpc.useUtils();
-
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "violation" | "clear" | "unclear">("all");
 
-    const filtered = (history ?? []).filter((item: Inspection) => {
+  const filtered = (history ?? []).filter((item: Inspection) => {
     const matchFilter = filter === "all" || item.status === filter;
     const q = search.toLowerCase();
-    const matchSearch =
-      !q ||
-      item.headline.toLowerCase().includes(q) ||
-      item.citation.toLowerCase().includes(q);
+    const matchSearch = !q || item.headline.toLowerCase().includes(q) || item.citation.toLowerCase().includes(q);
     return matchFilter && matchSearch;
   });
 
   const handleDelete = (id: number) => {
-    deleteMutation.mutate({ id }, {
-      onSuccess: () => utils.history.list.invalidate(),
-    });
+    deleteMutation.mutate({ id }, { onSuccess: () => utils.history.list.invalidate() });
   };
 
   const FILTERS = [
@@ -636,36 +432,32 @@ function HistoryTab() {
   ] as const;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-4">
       <div>
-        <h2 className="text-xl font-bold tracking-tight">Inspection History</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          {history?.length ?? 0} total analyses
-        </p>
+        <h2 className="text-2xl font-black tracking-tight text-white">Inspection History</h2>
+        <p className="text-sm text-white/40 mt-1">{history?.length ?? 0} total analyses</p>
       </div>
 
-      {/* Search */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
         <input
           type="text"
           placeholder="Search analyses…"
           value={search}
           onChange={e => setSearch(e.target.value)}
-          className="w-full pl-9 pr-4 py-2.5 rounded-lg border border-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[var(--cs-red)]/30 focus:border-[var(--cs-red)] placeholder:text-muted-foreground/60"
+          className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-white/10 bg-[#2F3133] text-sm text-white focus:outline-none focus:ring-2 focus:ring-[#F2C230]/30 focus:border-[#F2C230]/50 placeholder:text-white/25"
         />
       </div>
 
-      {/* Filter pills */}
       <div className="flex gap-2 overflow-x-auto pb-1">
         {FILTERS.map(f => (
           <button
             key={f.key}
             onClick={() => setFilter(f.key)}
-            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${
               filter === f.key
-                ? "bg-[var(--cs-red)] text-white border-[var(--cs-red)]"
-                : "bg-white text-muted-foreground border-border hover:border-[var(--cs-red)] hover:text-[var(--cs-red)]"
+                ? "bg-[#F2C230] text-[#1F2224] border-[#F2C230]"
+                : "bg-[#2F3133] text-white/50 border-white/10 hover:border-[#F2C230]/40 hover:text-white/80"
             }`}
           >
             {f.label}
@@ -673,53 +465,47 @@ function HistoryTab() {
         ))}
       </div>
 
-      {/* List */}
       {isLoading ? (
         <div className="space-y-3">
           {[1, 2, 3].map(i => (
-            <div key={i} className="rounded-xl border border-border bg-white h-20 animate-pulse" />
+            <div key={i} className="rounded-2xl bg-[#2F3133] h-20 animate-pulse" />
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border bg-muted/30 p-10 text-center">
-          <ClipboardList className="w-8 h-8 mx-auto mb-2 text-muted-foreground/40" />
-          <p className="text-sm text-muted-foreground">No analyses found</p>
+        <div className="rounded-2xl border border-dashed border-white/10 bg-[#2F3133]/50 p-10 text-center">
+          <ClipboardList className="w-8 h-8 mx-auto mb-2 text-white/20" />
+          <p className="text-sm text-white/40">No analyses found</p>
         </div>
       ) : (
         <div className="space-y-2">
           {filtered.map((item: Inspection) => (
-            <div key={item.id} className="rounded-xl border border-border bg-white overflow-hidden shadow-sm group">
-              <StatusBar status={item.status} />
+            <div key={item.id} className="rounded-2xl bg-[#2F3133] border border-white/8 overflow-hidden group">
+              {/* top severity bar */}
+              <div className={`h-0.5 w-full ${item.status === "violation" ? "bg-red-500" : item.status === "clear" ? "bg-emerald-400" : "bg-[#F2C230]"}`} />
               <div className="p-4">
-                <div className="flex items-start justify-between gap-2">
+                <div className="flex items-start gap-3">
+                  <SeverityDot status={item.status} />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-foreground leading-tight">{item.headline}</p>
+                    <p className="text-sm font-semibold text-white leading-tight">{item.headline}</p>
                     {item.citation && (
-                      <p className="text-xs font-mono text-[var(--cs-red)] mt-0.5">{item.citation}</p>
+                      <p className="text-xs font-mono text-[#F2C230]/80 mt-0.5">{item.citation}</p>
                     )}
-                  </div>
-                  <StatusBadge status={item.status} />
-                </div>
-                <div className="flex items-center justify-between mt-3">
-                  <span className="text-xs text-muted-foreground">
-                    {new Date(item.createdAt).toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                    })}
-                  </span>
-                  <div className="flex items-center gap-3">
-                    {item.status === "violation" && (
-                      <span className="text-xs font-medium text-[var(--cs-red)]">
-                        Up to {item.maxPenalty}
+                    <div className="flex items-center justify-between mt-2">
+                      <span className="text-xs text-white/30">
+                        {new Date(item.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                       </span>
-                    )}
-                    <button
-                      onClick={() => handleDelete(item.id)}
-                      className="text-xs text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
+                      <div className="flex items-center gap-3">
+                        {item.status === "violation" && (
+                          <span className="text-xs font-semibold text-red-400">Up to {item.maxPenalty}</span>
+                        )}
+                        <button
+                          onClick={() => handleDelete(item.id)}
+                          className="text-xs text-white/20 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -735,11 +521,10 @@ function HistoryTab() {
 function AccountTab() {
   const { user, logout } = useAuth();
   const { data: usage } = trpc.inspect.usageThisMonth.useQuery();
-  const { data: sub, refetch: refetchSub } = trpc.billing.getSubscription.useQuery();
+  const { data: sub } = trpc.billing.getSubscription.useQuery();
 
   const used = usage?.used ?? 0;
-  const limit = usage?.limit ?? 5;
-  const period = usage?.period ?? "month";
+  const limit = usage?.limit ?? 3;
   const isPro = sub && (sub.status === "active" || sub.status === "trialing");
   const planLabel = isPro ? (sub.plan === "team" ? "Team" : "Pro") : "Field (Free)";
 
@@ -764,49 +549,49 @@ function AccountTab() {
     checkoutMutation.mutate({ plan, origin: window.location.origin });
   };
 
-  const handleManageBilling = () => {
-    portalMutation.mutate({ origin: window.location.origin });
-  };
-
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 pb-4">
       <div>
-        <h2 className="text-xl font-bold tracking-tight">Account</h2>
+        <h2 className="text-2xl font-black tracking-tight text-white">Account</h2>
       </div>
 
       {/* User card */}
-      <div className="rounded-xl border border-border bg-white p-5 shadow-sm">
+      <div className="rounded-2xl bg-[#2F3133] border border-white/8 p-5">
         <div className="flex items-center gap-4 mb-4">
-          <div className="w-12 h-12 rounded-full bg-[var(--cs-red-light)] border border-[var(--cs-red-border)] flex items-center justify-center flex-shrink-0">
-            <span className="text-lg font-bold text-[var(--cs-red)]">
+          <div className="w-12 h-12 rounded-full bg-[#F2C230]/15 border border-[#F2C230]/30 flex items-center justify-center flex-shrink-0">
+            <span className="text-lg font-black text-[#F2C230]">
               {user?.name?.charAt(0).toUpperCase() ?? "U"}
             </span>
           </div>
           <div className="min-w-0">
-            <p className="font-semibold text-foreground truncate">{user?.name || "CiteSafe User"}</p>
-            <p className="text-xs text-muted-foreground truncate">{user?.email || ""}</p>
+            <p className="font-bold text-white truncate">{user?.name || "CiteSafe User"}</p>
+            <p className="text-xs text-white/40 truncate">{user?.email || ""}</p>
           </div>
+          <span className={`ml-auto text-xs font-bold px-2.5 py-1 rounded-full ${isPro ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-[#F2C230]/15 text-[#F2C230] border border-[#F2C230]/30"}`}>
+            {planLabel}
+          </span>
         </div>
-        <Separator className="mb-4" />
-        <div className="space-y-3">
+
+        <div className="border-t border-white/8 pt-4 space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Plan</span>
-            <span className={`text-sm font-semibold ${isPro ? "text-emerald-600" : "text-[var(--cs-red)]"}`}>
-              {planLabel}
-            </span>
+            <span className="text-sm text-white/40">Analyses Used</span>
+            <span className="text-sm font-semibold text-white">{used} / {limit}</span>
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Analyses Used</span>
-            <span className="text-sm font-medium text-foreground">{used} / {limit}</span>
+          <div className="h-1.5 bg-white/8 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${isPro ? "bg-emerald-400" : "bg-[#F2C230]"}`}
+              style={{ width: `${Math.min(Math.round((used / limit) * 100), 100)}%` }}
+            />
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">{isPro ? "Daily Limit" : "Monthly Limit"}</span>
-            <span className="text-sm font-medium text-foreground">{limit} / {period}</span>
-          </div>
+          {!isPro && (
+            <p className="text-xs text-white/30">
+              {limit - used} free analyses remaining this month
+            </p>
+          )}
           {sub?.currentPeriodEnd && (
             <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Renews</span>
-              <span className="text-sm font-medium text-foreground">
+              <span className="text-sm text-white/40">Renews</span>
+              <span className="text-sm font-semibold text-white">
                 {new Date(sub.currentPeriodEnd).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
               </span>
             </div>
@@ -814,24 +599,24 @@ function AccountTab() {
         </div>
       </div>
 
-      {/* Pro subscriber — manage billing */}
+      {/* Pro subscriber */}
       {isPro ? (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5">
-          <div className="flex items-start gap-3 mb-3">
-            <CheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+        <div className="rounded-2xl bg-emerald-500/10 border border-emerald-500/30 p-5">
+          <div className="flex items-start gap-3 mb-4">
+            <CheckCircle className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
             <div>
-              <h3 className="font-bold text-foreground">You're on {planLabel}</h3>
-              <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
+              <h3 className="font-bold text-white">You're on {planLabel}</h3>
+              <p className="text-sm text-white/50 mt-1 leading-relaxed">
                 {sub?.plan === "team"
                   ? "Unlimited analyses, multi-user org accounts, PDF reports, and priority support."
-                  : "Unlimited analyses (50/day), PDF reports, and violation history export."}
+                  : "50 analyses/day, PDF reports, and violation history export."}
               </p>
             </div>
           </div>
           <Button
             variant="outline"
-            className="w-full border-emerald-300 text-emerald-700 hover:bg-emerald-100"
-            onClick={handleManageBilling}
+            className="w-full border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 bg-transparent"
+            onClick={() => portalMutation.mutate({ origin: window.location.origin })}
             disabled={portalMutation.isPending}
           >
             {portalMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
@@ -839,24 +624,23 @@ function AccountTab() {
           </Button>
         </div>
       ) : (
-        /* Free tier — upgrade options */
         <div className="space-y-3">
           {/* Pro */}
-          <div className="rounded-xl border border-[var(--cs-red-border)] bg-[var(--cs-red-light)] p-5">
-            <div className="flex items-start gap-3 mb-3">
-              <TrendingUp className="w-5 h-5 text-[var(--cs-red)] flex-shrink-0 mt-0.5" />
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="font-bold text-foreground">Pro</h3>
-                  <span className="text-xs font-semibold text-[var(--cs-red)] bg-white border border-[var(--cs-red-border)] px-2 py-0.5 rounded-full">$49/mo</span>
+          <div className="rounded-2xl bg-[#2F3133] border border-[#F2C230]/30 p-5">
+            <div className="flex items-start gap-3 mb-4">
+              <Zap className="w-5 h-5 text-[#F2C230] flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-black text-white">Pro</h3>
+                  <span className="text-sm font-black text-[#F2C230]">$49/mo</span>
                 </div>
-                <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
+                <p className="text-sm text-white/50 mt-1 leading-relaxed">
                   50 analyses/day, PDF reports, full violation history export.
                 </p>
               </div>
             </div>
             <Button
-              className="w-full bg-[var(--cs-red)] hover:bg-[var(--cs-red)]/90 text-white font-semibold"
+              className="w-full bg-[#F2C230] hover:bg-[#F2C230]/90 text-[#1F2224] font-black h-11 rounded-xl"
               onClick={() => handleUpgrade("pro")}
               disabled={checkoutMutation.isPending}
             >
@@ -866,22 +650,22 @@ function AccountTab() {
           </div>
 
           {/* Team */}
-          <div className="rounded-xl border border-border bg-white p-5 shadow-sm">
-            <div className="flex items-start gap-3 mb-3">
-              <Shield className="w-5 h-5 text-foreground flex-shrink-0 mt-0.5" />
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="font-bold text-foreground">Team</h3>
-                  <span className="text-xs font-semibold text-foreground bg-muted border border-border px-2 py-0.5 rounded-full">$149/mo</span>
+          <div className="rounded-2xl bg-[#2F3133] border border-white/8 p-5">
+            <div className="flex items-start gap-3 mb-4">
+              <Shield className="w-5 h-5 text-white/50 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-black text-white">Team</h3>
+                  <span className="text-sm font-black text-white/70">$149/mo</span>
                 </div>
-                <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
+                <p className="text-sm text-white/50 mt-1 leading-relaxed">
                   Everything in Pro + multi-user org accounts (up to 10 seats).
                 </p>
               </div>
             </div>
             <Button
               variant="outline"
-              className="w-full"
+              className="w-full border-white/15 text-white/70 hover:bg-white/5 bg-transparent h-11 rounded-xl"
               onClick={() => handleUpgrade("team")}
               disabled={checkoutMutation.isPending}
             >
@@ -893,55 +677,53 @@ function AccountTab() {
       )}
 
       {/* About */}
-      <div className="rounded-xl border border-border bg-white p-5 shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-4">
-          About CiteSafe
-        </p>
+      <div className="rounded-2xl bg-[#2F3133] border border-white/8 p-5">
+        <p className="text-xs font-bold uppercase tracking-widest text-white/30 mb-4">About CiteSafe</p>
         <div className="space-y-3">
           {[
             { label: "Version", value: "1.0.0" },
             { label: "Regulations", value: "29 CFR 1910 + 1926" },
-            { label: "AI Engine", value: "Claude Vision (Anthropic)" },
+            { label: "AI Engine", value: "CiteSafe Vision AI™" },
+            { label: "Training Data", value: "29 CFR 1910 & 1926 + OSHA Standards" },
             { label: "Last Updated", value: "June 2026" },
           ].map(row => (
             <div key={row.label} className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">{row.label}</span>
-              <span className="text-sm font-medium text-foreground">{row.value}</span>
+              <span className="text-sm text-white/40">{row.label}</span>
+              <span className="text-sm font-semibold text-white">{row.value}</span>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Sign out */}
       <Button
         variant="outline"
-        className="w-full border-destructive text-destructive hover:bg-destructive/5"
+        className="w-full border-red-500/30 text-red-400 hover:bg-red-500/10 bg-transparent h-11 rounded-xl"
         onClick={logout}
       >
         <LogOut className="w-4 h-4 mr-2" />
         Sign Out
       </Button>
 
-      <p className="text-xs text-muted-foreground text-center">
+      <p className="text-xs text-white/20 text-center">
         CiteSafe is an AI analysis tool and does not constitute legal advice.
       </p>
     </div>
   );
 }
 
-// ── Guest components ────────────────────────────────────────────────────────────
+// ── Guest Gate ────────────────────────────────────────────────────────────────
 function GuestGate() {
   return (
     <div className="flex flex-col items-center justify-center py-20 gap-5 text-center">
-      <div className="w-14 h-14 rounded-2xl bg-[var(--cs-red-light)] border border-[var(--cs-red-border)] flex items-center justify-center">
-        <Shield className="w-7 h-7 text-[var(--cs-red)]" />
+      <div className="w-16 h-16 rounded-2xl bg-[#F2C230]/10 border border-[#F2C230]/30 flex items-center justify-center">
+        <Shield className="w-8 h-8 text-[#F2C230]" />
       </div>
       <div>
-        <p className="font-bold text-foreground">Sign in to access this section</p>
-        <p className="text-sm text-muted-foreground mt-1">Create a free account to save your inspection history and track usage.</p>
+        <p className="font-black text-white text-lg">Sign in to access this section</p>
+        <p className="text-sm text-white/40 mt-1 max-w-xs">Create a free account to save your inspection history and track usage.</p>
       </div>
       <Button
-        className="bg-[var(--cs-red)] hover:bg-[var(--cs-red)]/90 text-white font-semibold"
+        className="bg-[#F2C230] hover:bg-[#F2C230]/90 text-[#1F2224] font-black px-8 h-12 rounded-xl"
         onClick={() => { window.location.href = getLoginUrl(); }}
       >
         Sign in — it's free
@@ -951,59 +733,46 @@ function GuestGate() {
 }
 
 function GuestInspectTab() {
-  const SAMPLE_PROMPTS_DEMO = [
-    "Worker on scaffold 15 ft high, no guardrails and no personal fall arrest system visible.",
-    "Electrical panel open with exposed wiring next to standing water on the floor.",
-    "Workers grinding metal without face shields or eye protection. No PPE visible.",
-    "Trench about 5 feet deep with no shoring, no ladder, and no spoil pile setback.",
-  ];
   const [text, setText] = useState("");
-
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 pb-4">
       <div>
-        <h2 className="text-xl font-bold tracking-tight">Inspect a Condition</h2>
-        <p className="text-sm text-muted-foreground mt-1">Upload a photo, describe what you see, or both.</p>
+        <h2 className="text-2xl font-black tracking-tight text-white">Snap a Photo.<br /><span className="text-[#F2C230]">Get OSHA Answers.</span></h2>
+        <p className="text-sm text-white/50 mt-2">Upload a photo, describe what you see, or both.</p>
       </div>
-
-      {/* Image upload placeholder */}
       <div className="grid grid-cols-2 gap-3">
         {[{ icon: Camera, label: "Take Photo" }, { icon: Upload, label: "Upload Image" }].map(btn => (
           <button
             key={btn.label}
             onClick={() => { window.location.href = getLoginUrl(); }}
-            className="flex flex-col items-center justify-center gap-2 h-24 rounded-xl border-2 border-dashed border-border bg-muted/30 hover:border-[var(--cs-red)] hover:bg-[var(--cs-red-light)] transition-all group"
+            className="flex flex-col items-center justify-center gap-2 h-28 rounded-2xl border-2 border-dashed border-white/15 bg-[#2F3133] hover:border-[#F2C230]/60 hover:bg-[#F2C230]/5 transition-all group"
           >
-            <btn.icon className="w-6 h-6 text-muted-foreground group-hover:text-[var(--cs-red)] transition-colors" />
-            <span className="text-xs font-medium text-muted-foreground group-hover:text-[var(--cs-red)] transition-colors">{btn.label}</span>
+            <btn.icon className="w-6 h-6 text-white/30 group-hover:text-[#F2C230] transition-colors" />
+            <span className="text-xs font-semibold text-white/40 group-hover:text-[#F2C230] transition-colors">{btn.label}</span>
           </button>
         ))}
       </div>
-
       <textarea
-        className="w-full rounded-xl border border-border bg-white text-sm p-4 resize-none focus:outline-none focus:ring-2 focus:ring-[var(--cs-red)]/30 focus:border-[var(--cs-red)] placeholder:text-muted-foreground/60"
+        className="w-full rounded-2xl border border-white/10 bg-[#2F3133] text-sm text-white p-4 resize-none focus:outline-none focus:ring-2 focus:ring-[#F2C230]/30 placeholder:text-white/25"
         rows={4}
         placeholder="Describe what you see… e.g. 'Worker on scaffold 15 ft high, no guardrails, no harness'"
         value={text}
         onChange={e => setText(e.target.value)}
       />
-
       <Button
-        className="w-full bg-[var(--cs-red)] hover:bg-[var(--cs-red)]/90 text-white font-semibold h-11"
+        className="w-full bg-[#F2C230] hover:bg-[#F2C230]/90 text-[#1F2224] font-black text-base h-13 rounded-2xl"
         onClick={() => { window.location.href = getLoginUrl(); }}
       >
-        <Search className="w-4 h-4 mr-2" />
         Sign in to Analyze
       </Button>
-
       <div>
-        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">Sample Scenarios</p>
+        <p className="text-xs font-bold uppercase tracking-widest text-white/30 mb-3">Sample Scenarios</p>
         <div className="space-y-2">
-          {SAMPLE_PROMPTS_DEMO.map((prompt, i) => (
+          {SAMPLE_PROMPTS.map((prompt, i) => (
             <button
               key={i}
               onClick={() => setText(prompt)}
-              className="w-full text-left rounded-lg border border-border bg-white hover:border-[var(--cs-red)] hover:bg-[var(--cs-red-light)] px-4 py-3 text-sm text-muted-foreground hover:text-foreground transition-all"
+              className="w-full text-left rounded-xl border border-white/8 bg-[#2F3133] hover:border-[#F2C230]/40 hover:bg-[#F2C230]/5 px-4 py-3 text-sm text-white/50 hover:text-white/80 transition-all"
             >
               {prompt}
             </button>
@@ -1020,86 +789,91 @@ export default function CiteSafeApp() {
   const [location, setLocation] = useLocation();
 
   const tabFromPath = (path: string): Tab => {
-    if (path.startsWith("/inspect")) return "inspect";
     if (path.startsWith("/history")) return "history";
     if (path.startsWith("/account")) return "account";
-    return "home";
+    return "inspect";
   };
 
   const [activeTab, setActiveTab] = useState<Tab>(() => tabFromPath(location));
+
+  // Set native status bar style on mount (iOS only)
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) {
+      StatusBar.setStyle({ style: Style.Dark }).catch(() => {});
+      StatusBar.setBackgroundColor({ color: '#1F2224' }).catch(() => {});
+    }
+  }, []);
 
   useEffect(() => {
     setActiveTab(tabFromPath(location));
   }, [location]);
 
   const navigateTo = (tab: Tab) => {
-    const paths: Record<Tab, string> = { home: "/", inspect: "/inspect", history: "/history", account: "/account" };
+    const paths: Record<Tab, string> = { inspect: "/inspect", history: "/history", account: "/account" };
+    // Haptic feedback on tab switch (iOS only)
+    if (Capacitor.isNativePlatform()) {
+      Haptics.impact({ style: ImpactStyle.Light }).catch(() => {});
+    }
     setLocation(paths[tab]);
   };
 
   const NAV_ITEMS = [
-    { key: "home" as Tab, label: "Home", icon: Home },
-    { key: "inspect" as Tab, label: "Inspect", icon: Search },
+    { key: "inspect" as Tab, label: "Inspect", icon: Camera },
     { key: "history" as Tab, label: "History", icon: ClipboardList },
     { key: "account" as Tab, label: "Account", icon: User },
   ];
 
-  // Guest mode: show app but restrict account/history to signed-in users
   const isGuest = !user && !loading;
 
+  if (loading) {
+    return (
+      <div className="h-full bg-[#1F2224] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-[#F2C230] animate-spin" />
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-[oklch(0.97_0.002_286)] flex flex-col">
-      {/* Top navbar */}
-      <header className="sticky top-0 z-50 bg-white border-b border-border shadow-sm">
+    <div className="h-full bg-[#1F2224] flex flex-col overflow-hidden">
+      {/* Top header */}
+      <header className="sticky top-0 z-50 bg-[#1F2224] border-b border-white/8">
         <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-[var(--cs-red)] flex items-center justify-center">
-              <Shield className="w-4 h-4 text-white" />
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-[#2F3133] border border-[#F2C230]/30 flex items-center justify-center">
+              <Shield className="w-4 h-4 text-[#F2C230]" />
             </div>
-            <span className="text-lg font-black tracking-tight">
-              CITE<span className="text-[var(--cs-red)]">SAFE</span>
+            <span className="text-lg font-black tracking-tight text-white">
+              Cite<span className="text-[#F2C230]">Safe</span>
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="hidden sm:inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-[var(--cs-red-light)] text-[var(--cs-red)] border border-[var(--cs-red-border)]">
-              FREE
-            </span>
-            <button
-              onClick={() => navigateTo("inspect")}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--cs-red)] text-white text-xs font-semibold hover:bg-[var(--cs-red)]/90 transition-colors"
-            >
-              <Camera className="w-3.5 h-3.5" />
-              New Scan
-            </button>
+            {!isGuest ? (
+              <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-[#F2C230]/15 text-[#F2C230] border border-[#F2C230]/30">
+                {user?.name?.split(" ")[0] ?? "User"}
+              </span>
+            ) : (
+              <button
+                onClick={() => { window.location.href = getLoginUrl(); }}
+                className="text-xs font-bold px-3 py-1.5 rounded-lg bg-[#F2C230] text-[#1F2224] hover:bg-[#F2C230]/90 transition-colors"
+              >
+                Sign In
+              </button>
+            )}
           </div>
         </div>
+        {/* Gold accent line */}
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-[#F2C230]/60 to-transparent" />
       </header>
 
-      {/* Caution stripe */}
-      <div className="cs-stripe" />
-
-      {/* Page content */}
-      <main className="flex-1 max-w-2xl mx-auto w-full px-4 py-6">
-        {activeTab === "home" && (
-          <HomeTab
-            onStartInspect={() => navigateTo("inspect")}
-            onGoHistory={() => navigateTo("history")}
-            onGoAccount={() => navigateTo("account")}
-          />
-        )}
-        {activeTab === "inspect" && (
-          isGuest ? <GuestInspectTab /> : <InspectTab />
-        )}
-        {activeTab === "history" && (
-          isGuest ? <GuestGate /> : <HistoryTab />
-        )}
-        {activeTab === "account" && (
-          isGuest ? <GuestGate /> : <AccountTab />
-        )}
+      {/* Page content — native-scroll enables iOS momentum scrolling */}
+      <main className="flex-1 max-w-2xl mx-auto w-full px-4 py-5 native-scroll">
+        {activeTab === "inspect" && (isGuest ? <GuestInspectTab /> : <InspectTab />)}
+        {activeTab === "history" && (isGuest ? <GuestGate /> : <HistoryTab />)}
+        {activeTab === "account" && (isGuest ? <GuestGate /> : <AccountTab />)}
       </main>
 
       {/* Bottom tab bar */}
-      <nav className="sticky bottom-0 z-50 bg-white border-t border-border shadow-[0_-1px_8px_rgba(0,0,0,0.06)]">
+      <nav className="sticky bottom-0 z-50 bg-[#1F2224] border-t border-white/8">
         <div className="max-w-2xl mx-auto flex">
           {NAV_ITEMS.map(item => {
             const isActive = activeTab === item.key;
@@ -1108,17 +882,19 @@ export default function CiteSafeApp() {
                 key={item.key}
                 onClick={() => navigateTo(item.key)}
                 className={`flex-1 flex flex-col items-center gap-1 py-3 transition-colors ${
-                  isActive ? "text-[var(--cs-red)]" : "text-muted-foreground hover:text-foreground"
+                  isActive ? "text-[#F2C230]" : "text-white/30 hover:text-white/60"
                 }`}
               >
                 <item.icon className={`w-5 h-5 ${isActive ? "stroke-[2.5]" : "stroke-[1.5]"}`} />
-                <span className={`text-[10px] font-semibold uppercase tracking-widest ${isActive ? "text-[var(--cs-red)]" : ""}`}>
+                <span className={`text-[10px] font-bold uppercase tracking-widest`}>
                   {item.label}
                 </span>
               </button>
             );
           })}
         </div>
+        {/* Safe area spacer for iOS home bar */}
+        <div style={{ height: 'env(safe-area-inset-bottom, 0px)' }} />
       </nav>
     </div>
   );
