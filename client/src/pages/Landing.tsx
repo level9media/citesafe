@@ -1,6 +1,7 @@
 import { Link } from "wouter";
 import { getLoginUrl } from "@/const";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useDemoLogin } from "@/hooks/useDemoLogin";
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 
@@ -18,6 +19,7 @@ export default function Landing() {
   }, [user, isLoading, setLocation]);
 
   const loginUrl = getLoginUrl();
+  const { demoLogin, isLoading: isDemoLoading } = useDemoLogin();
 
   return (
     <div className="min-h-screen font-sans" style={{ backgroundColor: "#1F2224", color: "#F3EFE6" }}>
@@ -101,6 +103,14 @@ export default function Landing() {
 
             {/* Social proof */}
             <p className="mt-6 text-sm opacity-50">No credit card required · 3 free inspections/month · Cancel anytime</p>
+            <button
+              onClick={demoLogin}
+              disabled={isDemoLoading}
+              className="mt-2 text-xs opacity-30 hover:opacity-60 underline underline-offset-2 transition-opacity disabled:opacity-20"
+              style={{ color: "#F3EFE6" }}
+            >
+              {isDemoLoading ? "Loading demo…" : "Try Demo — no account needed"}
+            </button>
           </div>
         </div>
       </section>

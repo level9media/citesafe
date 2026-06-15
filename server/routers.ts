@@ -16,6 +16,7 @@ import {
   getUserByStripeCustomerId,
   updateUserStripeCustomerId,
   upsertUser,
+  getUserByOpenId,
 } from "./db";
 import { sdk } from "./_core/sdk";
 import { z } from "zod";
@@ -59,6 +60,75 @@ export const appRouter = router({
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
       return { success: true } as const;
     }),
+    // Demo mode — no OAuth required. Creates a sandboxed demo user session.
+    // Used by Apple reviewers and anyone who wants to try the app without signing up.
+    demoLogin: publicProcedure
+      .mutation(async ({ ctx }) => {
+        const DEMO_OPEN_ID = "demo_apple_reviewer_v1";
+        const DEMO_NAME = "Demo Inspector";
+        const DEMO_EMAIL = "demo@citesafe.app";
+        // Upsert demo user (idempotent — safe to call multiple times)
+        await upsertUser({
+          openId: DEMO_OPEN_ID,
+          name: DEMO_NAME,
+          email: DEMO_EMAIL,
+          loginMethod: "demo",
+          lastSignedIn: new Date(),
+        });
+        // Seed demo inspection history on first login
+        const demoUser = await getUserByOpenId(DEMO_OPEN_ID);
+        const existing = demoUser ? await getInspectionsByUser(demoUser.id, 1) : [];
+        if (!existing || existing.length === 0) {
+          if (demoUser) {
+            await createInspection({
+              userId: demoUser.id,
+              status: "violation",
+              headline: "Missing Fall Protection on Scaffold",
+              citation: "29 CFR 1926.502(d)",
+              analysis: "Workers observed on scaffold at 12 ft elevation without guardrails or personal fall arrest systems. This constitutes a serious violation of OSHA fall protection standards for construction.",
+              severity: "serious",
+              maxPenalty: "$16,131 per violation",
+              confidence: 95,
+              fullResult: JSON.stringify({
+                status: "violation",
+                headline: "Missing Fall Protection on Scaffold",
+                analysis: "Workers observed on scaffold at 12 ft elevation without guardrails or personal fall arrest systems.",
+                citations: [{ code: "29 CFR 1926.502(d)", title: "Fall Protection Systems Criteria", relevance: "Requires guardrail systems, safety net systems, or personal fall arrest systems at heights of 6 ft or more in construction." }],
+                correctiveAction: "Install guardrail systems on all open sides and ends of scaffolds. Alternatively, provide and enforce use of personal fall arrest systems. Document corrective actions and conduct toolbox talk on fall protection.",
+                severity: "serious",
+                maxPenalty: "$16,131 per violation",
+                confidence: 95
+              }),
+            });
+            await createInspection({
+              userId: demoUser.id,
+              status: "clear",
+              headline: "PPE Compliance Verified",
+              citation: "",
+              analysis: "All workers observed wearing appropriate hard hats, safety glasses, and high-visibility vests. PPE is in good condition and properly fitted.",
+              severity: "none",
+              maxPenalty: "N/A",
+              confidence: 98,
+              fullResult: JSON.stringify({
+                status: "clear",
+                headline: "PPE Compliance Verified",
+                analysis: "All workers observed wearing appropriate hard hats, safety glasses, and high-visibility vests.",
+                citations: [],
+                severity: "none",
+                maxPenalty: "N/A",
+                confidence: 98
+              }),
+            });
+          }
+        }
+        const sessionToken = await sdk.createSessionToken(DEMO_OPEN_ID, {
+          name: DEMO_NAME,
+          expiresInMs: ONE_YEAR_MS,
+        });
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+        return { success: true } as const;
+      }),
     // Native iOS OAuth: exchange code+state after SFSafariViewController deep link callback
     // The deep link citesafe://auth/callback?code=...&state=... is handled client-side,
     // then this procedure is called to exchange the code for a session cookie.

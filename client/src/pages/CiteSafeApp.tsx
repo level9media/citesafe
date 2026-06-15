@@ -3,6 +3,7 @@ import { Haptics, ImpactStyle } from "@capacitor/haptics";
 import { StatusBar, Style } from "@capacitor/status-bar";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useNativeLogin } from "@/hooks/useNativeLogin";
+import { useDemoLogin } from "@/hooks/useDemoLogin";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -714,6 +715,7 @@ function AccountTab() {
 // ── Guest Gate ────────────────────────────────────────────────────────────────
 function GuestGate() {
   const { login, isExchanging } = useNativeLogin();
+  const { demoLogin, isLoading: isDemoLoading } = useDemoLogin();
   return (
     <div className="flex flex-col items-center justify-center py-20 gap-5 text-center">
       <div className="w-16 h-16 rounded-2xl bg-[#F2C230]/10 border border-[#F2C230]/30 flex items-center justify-center">
@@ -726,16 +728,24 @@ function GuestGate() {
       <Button
         className="bg-[#F2C230] hover:bg-[#F2C230]/90 text-[#1F2224] font-black px-8 h-12 rounded-xl"
         onClick={login}
-        disabled={isExchanging}
+        disabled={isExchanging || isDemoLoading}
       >
         {isExchanging ? "Signing in…" : "Sign in — it's free"}
       </Button>
+      <button
+        onClick={demoLogin}
+        disabled={isDemoLoading || isExchanging}
+        className="text-xs text-white/30 hover:text-white/60 underline underline-offset-2 transition-colors disabled:opacity-50"
+      >
+        {isDemoLoading ? "Loading demo…" : "Try Demo (no account needed)"}
+      </button>
     </div>
   );
 }
 
 function GuestInspectTab() {
   const { login, isExchanging } = useNativeLogin();
+  const { demoLogin, isLoading: isDemoLoading } = useDemoLogin();
   const [text, setText] = useState("");
   return (
     <div className="space-y-5 pb-4">
@@ -765,10 +775,17 @@ function GuestInspectTab() {
       <Button
         className="w-full bg-[#F2C230] hover:bg-[#F2C230]/90 text-[#1F2224] font-black text-base h-13 rounded-2xl"
         onClick={login}
-        disabled={isExchanging}
+        disabled={isExchanging || isDemoLoading}
       >
         {isExchanging ? "Signing in…" : "Sign in to Analyze"}
       </Button>
+      <button
+        onClick={demoLogin}
+        disabled={isDemoLoading || isExchanging}
+        className="w-full text-xs text-white/30 hover:text-white/60 underline underline-offset-2 transition-colors py-1 disabled:opacity-50"
+      >
+        {isDemoLoading ? "Loading demo…" : "Try Demo — no account needed"}
+      </button>
       <div>
         <p className="text-xs font-bold uppercase tracking-widest text-white/30 mb-3">Sample Scenarios</p>
         <div className="space-y-2">
