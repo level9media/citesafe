@@ -1,77 +1,47 @@
 /**
- * useNativeLogin
+ * useNativeLogin — Option B (HTTPS-based callback, no custom URL scheme)
  *
- * On native Capacitor (iOS/Android):
- *   - Opens the OAuth portal inside SFSafariViewController via @capacitor/browser
- *   - Listens for the deep link callback (citesafe://auth/callback?code=...&state=...)
- *   - Exchanges the code server-side via trpc.auth.nativeCallback
- *   - Closes the in-app browser and refreshes auth state
+ * On native iOS/Android:
+ *   1. Opens SFSafariViewController via Browser.open()
+ *   2. OAuth callback hits https://citesafe.app/api/oauth/callback (already whitelisted)
+ *   3. Server sets session cookie and redirects to /native-auth-success
+ *   4. The NativeAuthSuccess page calls Browser.close() + invalidates auth
+ *   5. User is authenticated inside the app — no citesafe:// URL scheme needed
  *
  * On web:
- *   - Falls back to the standard window.location.href redirect flow
+ *   Falls back to standard window.location.href redirect.
  */
 import { Capacitor } from "@capacitor/core";
 import { Browser } from "@capacitor/browser";
-import { App as CapApp } from "@capacitor/app";
-import { getLoginUrl, NATIVE_REDIRECT_URI } from "@/const";
-import { trpc } from "@/lib/trpc";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback } from "react";
+import { getLoginUrl } from "@/const";
 
 export function useNativeLogin() {
-  const utils = trpc.useUtils();
-  const listenerRegistered = useRef(false);
-
-  const exchangeMutation = trpc.auth.nativeCallback.useMutation({
-    onSuccess: async () => {
-      // Refresh auth state so useAuth() picks up the new session cookie
-      await utils.auth.me.invalidate();
-    },
-  });
-
-  useEffect(() => {
-    if (!Capacitor.isNativePlatform() || listenerRegistered.current) return;
-    listenerRegistered.current = true;
-
-    // Listen for the deep link that fires when the OAuth server redirects to
-    // citesafe://auth/callback?code=...&state=...
-    const handlePromise = CapApp.addListener("appUrlOpen", async (event: { url: string }) => {
-      const url = event.url;
-      if (!url.startsWith(NATIVE_REDIRECT_URI)) return;
-
-      // Close the in-app browser immediately
-      await Browser.close().catch(() => {});
-
-      // Parse code and state from the deep link URL
-      const parsed = new URL(url);
-      const code = parsed.searchParams.get("code");
-      const state = parsed.searchParams.get("state");
-
-      if (code && state) {
-        exchangeMutation.mutate({ code, state });
-      }
-    });
-
-    return () => {
-      handlePromise.then((h) => h.remove()).catch(() => {});
-      listenerRegistered.current = false;
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const login = useCallback(async () => {
     if (Capacitor.isNativePlatform()) {
-      const url = getLoginUrl(true); // forNative=true → citesafe:// redirect URI
+      // Build the login URL. The state encodes the redirect URI with native=1 so
+      // the server knows to redirect to /native-auth-success after setting the cookie.
+      const redirectUri = `${window.location.origin}/api/oauth/callback`;
+      const nativeState = btoa(`${redirectUri}?native=1`);
+      const oauthPortalUrl = import.meta.env.VITE_OAUTH_PORTAL_URL;
+      const appId = import.meta.env.VITE_APP_ID;
+
+      const url = new URL(`${oauthPortalUrl}/app-auth`);
+      url.searchParams.set("appId", appId);
+      url.searchParams.set("redirectUri", redirectUri);
+      url.searchParams.set("state", nativeState);
+      url.searchParams.set("type", "signIn");
+
       await Browser.open({
-        url,
-        windowName: "_self",
+        url: url.toString(),
         presentationStyle: "popover",
         toolbarColor: "#1F2224",
       });
     } else {
       // Web: standard full-page redirect
-      window.location.href = getLoginUrl(false);
+      window.location.href = getLoginUrl();
     }
   }, []);
 
-  return { login, isExchanging: exchangeMutation.isPending };
+  return { login, isExchanging: false };
 }

@@ -44,7 +44,20 @@ export function registerOAuthRoutes(app: Express) {
       const cookieOptions = getSessionCookieOptions(req);
       res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
 
-      res.redirect(302, "/");
+      // If the state encodes a native flag, redirect to /native-auth-success so the
+      // Capacitor WebView can detect the URL change and close SFSafariViewController.
+      // Otherwise fall back to the standard web redirect.
+      let redirectPath = "/";
+      try {
+        const decoded = atob(state);
+        if (decoded.includes("native=1")) {
+          redirectPath = "/native-auth-success";
+        }
+      } catch {
+        // malformed state — fall back to /
+      }
+
+      res.redirect(302, redirectPath);
     } catch (error) {
       console.error("[OAuth] Callback failed", error);
       res.status(500).json({ error: "OAuth callback failed" });

@@ -5,14 +5,27 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import CiteSafeApp from "./pages/CiteSafeApp";
+import Landing from "./pages/Landing";
+import Pricing from "./pages/Pricing";
+import Privacy from "./pages/Privacy";
+import Terms from "./pages/Terms";
+import Support from "./pages/Support";
+import NativeAuthSuccess from "./pages/NativeAuthSuccess";
 
 function Router() {
   return (
     <Switch>
-      <Route path={"/"} component={CiteSafeApp} />
+      <Route path={"/"} component={Landing} />
+      <Route path={"/pricing"} component={Pricing} />
+      <Route path={"/privacy"} component={Privacy} />
+      <Route path={"/terms"} component={Terms} />
+      <Route path={"/support"} component={Support} />
       <Route path={"/inspect"} component={CiteSafeApp} />
       <Route path={"/history"} component={CiteSafeApp} />
       <Route path={"/account"} component={CiteSafeApp} />
+      <Route path={"/sites"} component={CiteSafeApp} />
+      <Route path={"/team"} component={CiteSafeApp} />
+      <Route path={"/native-auth-success"} component={NativeAuthSuccess} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>
