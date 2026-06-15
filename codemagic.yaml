@@ -53,6 +53,21 @@ workflows:
           echo "=== Icon files in place ==="
           ls "$ICON_DEST/"
 
+      - name: Register citesafe:// URL scheme for OAuth deep link
+        script: |
+          # Required for @capacitor/browser OAuth flow:
+          # SFSafariViewController redirects to citesafe://auth/callback after login.
+          # Without this entry in Info.plist, iOS silently drops the deep link
+          # and the user stays stuck in the in-app browser after authenticating.
+          PLIST="ios/App/App/Info.plist"
+          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes array" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0 dict" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLName string com.levelninemedia.citesafe" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes array" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes:0 string citesafe" "$PLIST" 2>/dev/null || true
+          echo "=== CFBundleURLTypes in Info.plist ==="
+          /usr/libexec/PlistBuddy -c "Print :CFBundleURLTypes" "$PLIST"
+
       - name: Set build number
         script: |
           EFFECTIVE_BUILD=$((BUILD_NUMBER + 100))

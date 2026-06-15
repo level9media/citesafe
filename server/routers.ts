@@ -1,9 +1,9 @@
-import { COOKIE_NAME } from "@shared/const";
+import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { invokeClaudeVision } from "./claude";
-import { getOrCreateCustomer, getOrCreatePriceId, getStripe, PLANS, type PlanKey } from "./stripe";
+import { getOrCreateCustomer, getOrCreatePriceId, getStripe, PLANS, type PlanKey, type BillingInterval } from "./stripe";
 import {
   createInspection,
   getInspectionsByUser,
@@ -15,12 +15,14 @@ import {
   deleteSubscriptionByUserId,
   getUserByStripeCustomerId,
   updateUserStripeCustomerId,
+  upsertUser,
 } from "./db";
+import { sdk } from "./_core/sdk";
 import { z } from "zod";
 import type { InspectionResult } from "@shared/types";
 
 // ── Limits ────────────────────────────────────────────────────────────────────
-const FREE_TIER_MONTHLY_LIMIT = 5;
+const FREE_TIER_MONTHLY_LIMIT = 3;
 const PRO_DAILY_LIMIT = 50;
 
 // ── OSHA system prompt ────────────────────────────────────────────────────────
@@ -57,6 +59,30 @@ export const appRouter = router({
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
       return { success: true } as const;
     }),
+    // Native iOS OAuth: exchange code+state after SFSafariViewController deep link callback
+    // The deep link citesafe://auth/callback?code=...&state=... is handled client-side,
+    // then this procedure is called to exchange the code for a session cookie.
+    nativeCallback: publicProcedure
+      .input(z.object({ code: z.string(), state: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        const tokenResponse = await sdk.exchangeCodeForToken(input.code, input.state);
+        const userInfo = await sdk.getUserInfo(tokenResponse.accessToken);
+        if (!userInfo.openId) throw new Error("openId missing from user info");
+        await upsertUser({
+          openId: userInfo.openId,
+          name: userInfo.name || null,
+          email: userInfo.email ?? null,
+          loginMethod: userInfo.loginMethod ?? (userInfo as any).platform ?? null,
+          lastSignedIn: new Date(),
+        });
+        const sessionToken = await sdk.createSessionToken(userInfo.openId, {
+          name: userInfo.name || "",
+          expiresInMs: ONE_YEAR_MS,
+        });
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+        return { success: true } as const;
+      }),
   }),
 
   // ── Inspect ────────────────────────────────────────────────────────────────
@@ -209,7 +235,11 @@ export const appRouter = router({
     }),
 
     createCheckoutSession: protectedProcedure
-      .input(z.object({ plan: z.enum(["pro", "team"]), origin: z.string() }))
+      .input(z.object({
+        plan: z.enum(["basic", "pro", "team"]),
+        interval: z.enum(["month", "year"]).default("month"),
+        origin: z.string(),
+      }))
       .mutation(async ({ ctx, input }) => {
         const stripe = getStripe();
         const user = ctx.user;
@@ -226,8 +256,11 @@ export const appRouter = router({
           await updateUserStripeCustomerId(user.id, customerId);
         }
 
-        // Get price ID for plan
-        const priceId = await getOrCreatePriceId(input.plan as PlanKey);
+        // Get price ID for plan + interval
+        const priceId = await getOrCreatePriceId(
+          input.plan as PlanKey,
+          input.interval as BillingInterval
+        );
 
         const session = await stripe.checkout.sessions.create({
           customer: customerId,
@@ -243,6 +276,7 @@ export const appRouter = router({
             customer_email: user.email ?? "",
             customer_name: user.name ?? "",
             plan: input.plan,
+            interval: input.interval,
           },
         });
 

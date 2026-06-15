@@ -2,7 +2,7 @@ import { Capacitor } from "@capacitor/core";
 import { Haptics, ImpactStyle } from "@capacitor/haptics";
 import { StatusBar, Style } from "@capacitor/status-bar";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { getLoginUrl } from "@/const";
+import { useNativeLogin } from "@/hooks/useNativeLogin";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -713,6 +713,7 @@ function AccountTab() {
 
 // ── Guest Gate ────────────────────────────────────────────────────────────────
 function GuestGate() {
+  const { login, isExchanging } = useNativeLogin();
   return (
     <div className="flex flex-col items-center justify-center py-20 gap-5 text-center">
       <div className="w-16 h-16 rounded-2xl bg-[#F2C230]/10 border border-[#F2C230]/30 flex items-center justify-center">
@@ -724,15 +725,17 @@ function GuestGate() {
       </div>
       <Button
         className="bg-[#F2C230] hover:bg-[#F2C230]/90 text-[#1F2224] font-black px-8 h-12 rounded-xl"
-        onClick={() => { window.location.href = getLoginUrl(); }}
+        onClick={login}
+        disabled={isExchanging}
       >
-        Sign in — it's free
+        {isExchanging ? "Signing in…" : "Sign in — it's free"}
       </Button>
     </div>
   );
 }
 
 function GuestInspectTab() {
+  const { login, isExchanging } = useNativeLogin();
   const [text, setText] = useState("");
   return (
     <div className="space-y-5 pb-4">
@@ -744,7 +747,7 @@ function GuestInspectTab() {
         {[{ icon: Camera, label: "Take Photo" }, { icon: Upload, label: "Upload Image" }].map(btn => (
           <button
             key={btn.label}
-            onClick={() => { window.location.href = getLoginUrl(); }}
+            onClick={login}
             className="flex flex-col items-center justify-center gap-2 h-28 rounded-2xl border-2 border-dashed border-white/15 bg-[#2F3133] hover:border-[#F2C230]/60 hover:bg-[#F2C230]/5 transition-all group"
           >
             <btn.icon className="w-6 h-6 text-white/30 group-hover:text-[#F2C230] transition-colors" />
@@ -761,9 +764,10 @@ function GuestInspectTab() {
       />
       <Button
         className="w-full bg-[#F2C230] hover:bg-[#F2C230]/90 text-[#1F2224] font-black text-base h-13 rounded-2xl"
-        onClick={() => { window.location.href = getLoginUrl(); }}
+        onClick={login}
+        disabled={isExchanging}
       >
-        Sign in to Analyze
+        {isExchanging ? "Signing in…" : "Sign in to Analyze"}
       </Button>
       <div>
         <p className="text-xs font-bold uppercase tracking-widest text-white/30 mb-3">Sample Scenarios</p>
@@ -786,6 +790,7 @@ function GuestInspectTab() {
 // ── Main App Shell ────────────────────────────────────────────────────────────
 export default function CiteSafeApp() {
   const { user, loading } = useAuth();
+  const { login: nativeLogin } = useNativeLogin();
   const [location, setLocation] = useLocation();
 
   const tabFromPath = (path: string): Tab => {
@@ -855,7 +860,7 @@ export default function CiteSafeApp() {
               </span>
             ) : (
               <button
-                onClick={() => { window.location.href = getLoginUrl(); }}
+                onClick={nativeLogin}
                 className="text-xs font-bold px-3 py-1.5 rounded-lg bg-[#F2C230] text-[#1F2224] hover:bg-[#F2C230]/90 transition-colors"
               >
                 Sign In
