@@ -529,26 +529,9 @@ function AccountTab() {
   const isPro = sub && (sub.status === "active" || sub.status === "trialing");
   const planLabel = isPro ? (sub.plan === "team" ? "Team" : "Pro") : "Field (Free)";
 
-  const checkoutMutation = trpc.billing.createCheckoutSession.useMutation({
-    onSuccess: (data) => {
-      if (data.url) {
-        toast.success("Redirecting to checkout…");
-        window.open(data.url, "_blank");
-      }
-    },
-    onError: (err) => toast.error(err.message),
-  });
-
-  const portalMutation = trpc.billing.createPortalSession.useMutation({
-    onSuccess: (data) => {
-      if (data.url) window.open(data.url, "_blank");
-    },
-    onError: (err) => toast.error(err.message),
-  });
-
-  const handleUpgrade = (plan: "pro" | "team") => {
-    checkoutMutation.mutate({ plan, origin: window.location.origin });
-  };
+  // NOTE: Upgrade/billing buttons are intentionally not present in the iOS app.
+  // Apple Guideline 3.1.1 prohibits in-app links to external purchase flows.
+  // Users manage their subscription at citesafe.app (plain text reference only).
 
   return (
     <div className="space-y-4 pb-4">
@@ -600,10 +583,10 @@ function AccountTab() {
         </div>
       </div>
 
-      {/* Pro subscriber */}
+      {/* Subscription status — Apple-compliant: no purchase buttons in iOS app */}
       {isPro ? (
         <div className="rounded-2xl bg-emerald-500/10 border border-emerald-500/30 p-5">
-          <div className="flex items-start gap-3 mb-4">
+          <div className="flex items-start gap-3">
             <CheckCircle className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
             <div>
               <h3 className="font-bold text-white">You're on {planLabel}</h3>
@@ -612,67 +595,28 @@ function AccountTab() {
                   ? "Unlimited analyses, multi-user org accounts, PDF reports, and priority support."
                   : "50 analyses/day, PDF reports, and violation history export."}
               </p>
+              <p className="text-xs text-white/30 mt-3">
+                Manage your subscription at citesafe.app
+              </p>
             </div>
           </div>
-          <Button
-            variant="outline"
-            className="w-full border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 bg-transparent"
-            onClick={() => portalMutation.mutate({ origin: window.location.origin })}
-            disabled={portalMutation.isPending}
-          >
-            {portalMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-            Manage Billing & Invoices →
-          </Button>
         </div>
       ) : (
-        <div className="space-y-3">
-          {/* Pro */}
-          <div className="rounded-2xl bg-[#2F3133] border border-[#F2C230]/30 p-5">
-            <div className="flex items-start gap-3 mb-4">
-              <Zap className="w-5 h-5 text-[#F2C230] flex-shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-black text-white">Pro</h3>
-                  <span className="text-sm font-black text-[#F2C230]">$49/mo</span>
-                </div>
-                <p className="text-sm text-white/50 mt-1 leading-relaxed">
-                  50 analyses/day, PDF reports, full violation history export.
-                </p>
-              </div>
+        <div className="rounded-2xl bg-[#2F3133] border border-[#F2C230]/20 p-5">
+          <div className="flex items-start gap-3">
+            <Zap className="w-5 h-5 text-[#F2C230] flex-shrink-0 mt-0.5" />
+            <div>
+              <h3 className="font-black text-white">Upgrade Your Plan</h3>
+              <p className="text-sm text-white/50 mt-1 leading-relaxed">
+                Pro ($49/mo) — 50 analyses/day, PDF reports, full history export.
+              </p>
+              <p className="text-sm text-white/50 mt-1 leading-relaxed">
+                Team ($149/mo) — Everything in Pro plus multi-user org accounts.
+              </p>
+              <p className="text-xs text-white/30 mt-3">
+                Subscribe at citesafe.app
+              </p>
             </div>
-            <Button
-              className="w-full bg-[#F2C230] hover:bg-[#F2C230]/90 text-[#1F2224] font-black h-11 rounded-xl"
-              onClick={() => handleUpgrade("pro")}
-              disabled={checkoutMutation.isPending}
-            >
-              {checkoutMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-              Upgrade to Pro →
-            </Button>
-          </div>
-
-          {/* Team */}
-          <div className="rounded-2xl bg-[#2F3133] border border-white/8 p-5">
-            <div className="flex items-start gap-3 mb-4">
-              <Shield className="w-5 h-5 text-white/50 flex-shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-black text-white">Team</h3>
-                  <span className="text-sm font-black text-white/70">$149/mo</span>
-                </div>
-                <p className="text-sm text-white/50 mt-1 leading-relaxed">
-                  Everything in Pro + multi-user org accounts (up to 10 seats).
-                </p>
-              </div>
-            </div>
-            <Button
-              variant="outline"
-              className="w-full border-white/15 text-white/70 hover:bg-white/5 bg-transparent h-11 rounded-xl"
-              onClick={() => handleUpgrade("team")}
-              disabled={checkoutMutation.isPending}
-            >
-              {checkoutMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-              Upgrade to Team →
-            </Button>
           </div>
         </div>
       )}
