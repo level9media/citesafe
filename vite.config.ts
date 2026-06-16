@@ -167,6 +167,15 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    // Strip console.log/warn/error in production builds.
+    // Keeps Xcode device logs clean during Apple review and prevents
+    // unhandled error messages from appearing in reviewer's debug output.
+    minify: "esbuild",
+    terserOptions: undefined,
+  },
+  esbuild: {
+    // Drop console.* and debugger statements in production
+    drop: process.env.NODE_ENV === "production" ? ["console", "debugger"] : [],
   },
   server: {
     host: true,

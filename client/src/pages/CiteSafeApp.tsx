@@ -27,6 +27,7 @@ import {
   Calendar,
   MapPin,
   Zap,
+  WifiOff,
 } from "lucide-react";
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useLocation } from "wouter";
@@ -793,10 +794,47 @@ export default function CiteSafeApp() {
 
   const isGuest = !user && !loading;
 
+  // Network error detection — if auth check fails with a network error,
+  // show a friendly offline screen instead of the generic ErrorBoundary.
+  const [isOffline, setIsOffline] = useState(false);
+
+  useEffect(() => {
+    const handleOffline = () => setIsOffline(true);
+    const handleOnline = () => setIsOffline(false);
+    window.addEventListener("offline", handleOffline);
+    window.addEventListener("online", handleOnline);
+    // Also check immediately
+    if (!navigator.onLine) setIsOffline(true);
+    return () => {
+      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("online", handleOnline);
+    };
+  }, []);
+
   if (loading) {
     return (
       <div className="h-full bg-[#1F2224] flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-[#F2C230] animate-spin" />
+      </div>
+    );
+  }
+
+  if (isOffline) {
+    return (
+      <div className="h-full bg-[#1F2224] flex flex-col items-center justify-center gap-4 px-6 text-center">
+        <div className="w-16 h-16 rounded-2xl bg-[#2F3133] border border-white/10 flex items-center justify-center">
+          <WifiOff className="w-8 h-8 text-[#F2C230]" />
+        </div>
+        <div>
+          <h2 className="text-xl font-black text-white mb-1">No Connection</h2>
+          <p className="text-sm text-white/50">Check your internet connection and try again.</p>
+        </div>
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-2 px-6 py-2.5 rounded-xl bg-[#F2C230] text-[#1F2224] text-sm font-bold hover:bg-[#F2C230]/90 active:scale-95 transition-all"
+        >
+          Retry
+        </button>
       </div>
     );
   }

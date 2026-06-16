@@ -10,6 +10,47 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { registerStripeWebhook } from "../stripeWebhook";
 
+// Allowed CORS origins:
+// - capacitor://localhost — Capacitor iOS/Android WebView sends this as Origin header
+// - https://citesafe.app — production web
+// - http://localhost:* — local development
+const ALLOWED_ORIGINS = [
+  "capacitor://localhost",
+  "https://citesafe.app",
+  "https://www.citesafe.app",
+];
+
+function corsMiddleware(
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction
+) {
+  const origin = req.headers.origin ?? "";
+  const isAllowed =
+    ALLOWED_ORIGINS.includes(origin) ||
+    /^http:\/\/localhost(:\d+)?$/.test(origin);
+
+  if (isAllowed) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, x-trpc-source"
+    );
+    res.setHeader(
+      "Access-Control-Allow-Methods",
+      "GET, POST, PUT, DELETE, OPTIONS"
+    );
+  }
+
+  if (req.method === "OPTIONS") {
+    res.sendStatus(204);
+    return;
+  }
+
+  next();
+}
+
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
     const server = net.createServer();
@@ -32,6 +73,10 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 async function startServer() {
   const app = express();
   const server = createServer(app);
+
+  // CORS must be first — before Stripe webhook and body parsers
+  app.use(corsMiddleware);
+
   // Stripe webhook MUST be registered before express.json() to preserve raw body for signature verification
   registerStripeWebhook(app);
   // Configure body parser with larger size limit for file uploads
