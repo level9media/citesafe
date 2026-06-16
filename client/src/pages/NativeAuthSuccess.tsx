@@ -40,7 +40,7 @@ export default function NativeAuthSuccess() {
       }
 
       // Redirect to the main app
-      setLocation("/app");
+      setLocation("/inspect");
     };
 
     finish();
