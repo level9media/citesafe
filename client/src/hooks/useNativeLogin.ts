@@ -10,18 +10,26 @@
  *
  * On web:
  *   Falls back to standard window.location.href redirect.
+ *
+ * IMPORTANT: On native, window.location.origin returns "capacitor://localhost"
+ * which the OAuth portal rejects. We must use the hardcoded production origin.
  */
 import { Capacitor } from "@capacitor/core";
 import { Browser } from "@capacitor/browser";
 import { useCallback } from "react";
 import { getLoginUrl } from "@/const";
 
+// The production origin — used on native where window.location.origin
+// returns "capacitor://localhost" (unreachable by the OAuth portal).
+const PRODUCTION_ORIGIN = "https://citesafe.app";
+
 export function useNativeLogin() {
   const login = useCallback(async () => {
     if (Capacitor.isNativePlatform()) {
-      // Build the login URL. The state encodes the redirect URI with native=1 so
-      // the server knows to redirect to /native-auth-success after setting the cookie.
-      const redirectUri = `${window.location.origin}/api/oauth/callback`;
+      // Use the hardcoded production origin — NOT window.location.origin
+      // which returns "capacitor://localhost" on native and would cause
+      // the OAuth portal to reject the redirect_uri.
+      const redirectUri = `${PRODUCTION_ORIGIN}/api/oauth/callback`;
       const nativeState = btoa(`${redirectUri}?native=1`);
       const oauthPortalUrl = import.meta.env.VITE_OAUTH_PORTAL_URL;
       const appId = import.meta.env.VITE_APP_ID;

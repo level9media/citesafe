@@ -1,17 +1,25 @@
 export { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 
-// Custom URL scheme registered in iOS Info.plist for deep link OAuth callback.
-// SFSafariViewController closes automatically when it sees this scheme.
-export const NATIVE_REDIRECT_URI = "citesafe://auth/callback";
+// On native Capacitor, window.location.origin returns "capacitor://localhost"
+// which the OAuth portal rejects as an unknown redirect URI.
+// Always use the production HTTPS origin for OAuth on native.
+const PRODUCTION_ORIGIN = "https://citesafe.app";
 
 // Generate login URL at runtime so redirect URI reflects the current origin.
-// Pass forNative=true on Capacitor iOS/Android to use the custom scheme.
-export const getLoginUrl = (forNative = false) => {
+// On native, always uses the hardcoded production origin.
+export const getLoginUrl = () => {
   const oauthPortalUrl = import.meta.env.VITE_OAUTH_PORTAL_URL;
   const appId = import.meta.env.VITE_APP_ID;
-  const redirectUri = forNative
-    ? NATIVE_REDIRECT_URI
-    : `${window.location.origin}/api/oauth/callback`;
+
+  // Use production origin on native (capacitor://localhost would be rejected),
+  // or the actual window origin on web (handles dev/staging environments correctly).
+  const origin =
+    typeof window !== "undefined" &&
+    window.location.origin.startsWith("capacitor://")
+      ? PRODUCTION_ORIGIN
+      : window.location.origin;
+
+  const redirectUri = `${origin}/api/oauth/callback`;
   const state = btoa(redirectUri);
 
   const url = new URL(`${oauthPortalUrl}/app-auth`);

@@ -1,10 +1,17 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { Check, Zap, Shield, Users, Star } from "lucide-react";
+import { Capacitor } from "@capacitor/core";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 import { toast } from "sonner";
+
+// On native, window.location.origin returns "capacitor://localhost" — use production origin.
+const getOrigin = () =>
+  typeof window !== "undefined" && window.location.origin.startsWith("capacitor://")
+    ? "https://citesafe.app"
+    : window.location.origin;
 
 type BillingInterval = "month" | "year";
 type PlanKey = "basic" | "pro" | "team";
@@ -113,7 +120,7 @@ export default function Pricing() {
     createCheckout.mutate({
       plan: planKey,
       interval,
-      origin: window.location.origin,
+      origin: getOrigin(),
     });
   };
 
